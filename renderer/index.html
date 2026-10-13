@@ -6,7 +6,7 @@
 <title>OpenJournal</title>
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-theme="light">
 <div id="app">
   <!-- ============ HOME ============ -->
   <section id="home-view">
@@ -29,17 +29,26 @@
       <button id="back-btn" title="Back to notebooks">←</button>
       <strong id="nb-name"></strong>
       <div class="spacer"></div>
-      <span id="page-indicator"></span>
+      <div id="pagedock" role="group" aria-label="Pages">
+        <button id="pg-prev" title="Previous page">‹</button>
+        <span id="page-indicator"></span>
+        <button id="pg-next" title="Next page">›</button>
+        <button id="pg-add" title="Add page">+</button>
+        <button id="pg-del" title="Delete current page">×</button>
+      </div>
       <button id="zoom-out" title="Zoom out (Ctrl+−)">−</button>
       <button id="zoom-label" title="Reset zoom">100%</button>
       <button id="zoom-in" title="Zoom in (Ctrl++)">+</button>
       <button id="zoom-fit" title="Fit width">Fit</button>
       <button id="lines-btn" class="toggle active" title="Ruled lines">Lines</button>
+      <button id="theme-btn" title="Toggle light/dark">☾</button>
+      <button id="penlog-btn" title="Copy pen event log for diagnostics">Pen log</button>
       <button id="hide-btn" title="Hide interface (H)">Hide UI</button>
     </div>
     <div id="pages"></div>
     <div id="island" role="toolbar" aria-label="Ink tools">
       <button data-tool="pen" class="tool active">Pen</button>
+      <button data-tool="pencil" class="tool" title="Pencil">Pencil</button>
       <button data-tool="highlighter" class="tool">Highlighter</button>
       <button data-tool="eraser" class="tool">Eraser</button>
       <button data-tool="select" class="tool" title="Select and move images">Select</button>
@@ -49,7 +58,8 @@
       <div class="colors" id="colors"></div>
       <input id="width" type="range" min="1" max="24" value="3" title="Stroke width">
       <span class="sep"></span>
-      <button id="undo-btn" title="Undo last stroke">Undo</button>
+      <button id="undo-btn" title="Undo last stroke (Ctrl+Z)">Undo</button>
+      <button id="redo-btn" title="Redo (Ctrl+Y)">Redo</button>
       <button id="clear-btn" title="Clear current page">Clear</button>
     </div>
     <button id="show-chrome" hidden title="Show interface (H)">⋯</button>

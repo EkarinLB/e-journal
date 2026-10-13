@@ -61,13 +61,31 @@
     nbId: null,
     tool: 'pen', color: '#101418', width: 3,
     zoom: 1, ruled: true,
-    drawing: null,           // { pageId, stroke }
-    undoStack: [],           // { pageId, strokeId }
+    drawing: null,           // { pageId, pointerId, pointerType, stroke, startedAt }
+    undoStack: [],           // { pageId, strokeId, stroke }
+    redoStack: [],           // { pageId, stroke }
+    penLog: [],              // ring buffer of recent pointer events for pen diagnostics
     canvases: new Map(),     // pageId -> { canvas, ctx, backing }
     selectedImage: null,     // image id (select tool)
-    dragImg: null,           // { pageId, imageId, dx, dy }
+    dragImg: null,           // { pageId, pointerId, imageId, dx, dy }
     imgCache: new Map(),     // image id -> HTMLImageElement
   };
+
+  // Pen diagnostics: lightweight ring buffer. The topbar "pen log" button
+  // copies it for analysis after a misbehaving stroke.
+  function logPen(phase, evt) {
+    try {
+      state.penLog.push({ t: Date.now(), ph: phase, ty: evt.pointerType, id: evt.pointerId, b: evt.buttons, p: evt.pressure, x: Math.round(evt.clientX), y: Math.round(evt.clientY) });
+      if (state.penLog.length > 400) state.penLog.splice(0, state.penLog.length - 400);
+    } catch (_) {}
+  }
+  function penPressure(evt) {
+    // Fast light flicks can report near-zero pressure (hairline) or exact
+    // zero; clamp the floor so pen strokes stay visible, keep expression.
+    const raw = evt.pressure;
+    if (evt.pointerType === 'pen') return Math.min(1, Math.max(raw || 0.5, 0.3));
+    return raw || 0.5;
+  }
 
   const notebook = () => state.library.notebooks.find((n) => n.id === state.nbId);
 
@@ -105,7 +123,7 @@
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = st.color;
-    ctx.globalAlpha = st.tool === 'highlighter' ? 0.45 : 1;
+    ctx.globalAlpha = st.tool === 'highlighter' ? 0.45 : st.tool === 'pencil' ? 0.85 : 1;
     if (pts.length === 1) {
       ctx.fillStyle = st.color;
       ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, (st.width * (pts[0].p || 0.5)) / 2, 0, 7); ctx.fill();
@@ -220,7 +238,7 @@
     const zone = $('pages');
     zone.innerHTML = '';
     state.canvases.clear();
-    nb.pages.forEach((pg, idx) => zone.appendChild(sheetEl(nb, pg, idx)));
+    nb.pages.forEach((pg) => zone.appendChild(sheetEl(nb, pg)));
     const end = document.createElement('div');
     end.id = 'end-zone';
     end.innerHTML = `<div id="scroll-hint">Scroll down for a new page</div>`;
@@ -233,34 +251,51 @@
     requestAnimationFrame(layoutPages);
   }
 
-  function sheetEl(nb, pg, idx) {
+  function sheetEl(nb, pg) {
     const wrap = document.createElement('div');
     wrap.className = 'sheet';
     const canvas = document.createElement('canvas');
     const entry = { canvas, ctx: canvas.getContext('2d'), backing: 1 };
     state.canvases.set(pg.id, entry);
-    const bar = document.createElement('div');
-    bar.className = 'sheet-bar';
-    bar.innerHTML = `<span>Page ${idx + 1}</span>`;
-    const del = document.createElement('button');
-    del.textContent = '×'; del.title = 'Delete page';
-    del.onclick = () => deletePage(pg.id);
-    bar.appendChild(del);
-    wrap.appendChild(canvas); wrap.appendChild(bar);
+    wrap.appendChild(canvas);
     attachInk(canvas, pg.id);
     return wrap;
   }
 
   function attachInk(canvas, pageId) {
+    // One gesture at a time per canvas. The tracked pointerId owns the
+    // stroke; palm touches, mouse jitter, or a second pen can never hijack
+    // it. Pen contact also pins touch-action so the view cannot steal the
+    // gesture mid-stroke (no more vanishing ink on fast flicks).
     canvas.addEventListener('pointerdown', (evt) => {
-      if (evt.pointerType === 'touch') return; // touch scrolls pages; pen/mouse draws
+      if (evt.pointerType === 'touch') return; // touch scrolls pages
+      logPen('down', evt);
+      if (state.drawing || state.dragImg) {
+        // Salvage a stuck gesture (older than 8s) instead of ignoring input forever.
+        const d0 = state.drawing;
+        if (d0 && Date.now() - (d0.startedAt || 0) > 8000) {
+          const nb0 = notebook();
+          const pg0 = nb0 ? nb0.pages.find((p) => p.id === d0.pageId) : null;
+          if (pg0 && d0.stroke.points.length > 0) {
+            pg0.strokes.push(d0.stroke);
+            state.undoStack.push({ pageId: pg0.id, strokeId: d0.stroke.id, stroke: d0.stroke });
+            state.redoStack = [];
+            scheduleSave(); redrawPage(pg0.id);
+          }
+          state.drawing = null;
+          canvas.style.touchAction = '';
+        }
+        if (state.dragImg && Date.now() - (state.dragImg.startedAt || 0) > 8000) state.dragImg = null;
+        if (state.drawing || state.dragImg) return; // pen owns the canvas right now
+      }
       evt.preventDefault();
-      canvas.setPointerCapture(evt.pointerId);
+      try { canvas.setPointerCapture(evt.pointerId); } catch (_) {}
       const nb = notebook();
       const pg = nb ? nb.pages.find((p) => p.id === pageId) : null;
       if (!pg) return;
       const pos = canvasPos(canvas, evt);
       if (state.tool === 'eraser') {
+        if (state.drawing && state.drawing.pointerType === 'pen') return; // never erase under an active pen
         if (eraseAt(pg, pos) > 0) { scheduleSave(); redrawPage(pageId); }
         return;
       }
@@ -268,16 +303,19 @@
         const hit = [...(pg.images || [])].reverse().find((im) =>
           pos.x >= im.x && pos.x <= im.x + im.w && pos.y >= im.y && pos.y <= im.y + im.h);
         state.selectedImage = hit ? hit.id : null;
-        if (hit) state.dragImg = { pageId, imageId: hit.id, dx: pos.x - hit.x, dy: pos.y - hit.y };
+        if (hit) state.dragImg = { pageId, pointerId: evt.pointerId, startedAt: Date.now(), imageId: hit.id, dx: pos.x - hit.x, dy: pos.y - hit.y };
         redrawPage(pageId);
         return;
       }
+      if (evt.pointerType === 'pen') canvas.style.touchAction = 'none';
       const w = state.tool === 'highlighter' ? Math.max(state.width, 12) : state.width;
-      state.drawing = { pageId, stroke: { id: uid(), tool: state.tool, color: state.color, width: w, points: [{ x: pos.x, y: pos.y, p: evt.pressure || 0.5 }] } };
+      const pr = penPressure(evt);
+      state.drawing = { pageId, pointerId: evt.pointerId, pointerType: evt.pointerType, startedAt: Date.now(), stroke: { id: uid(), tool: state.tool, color: state.color, width: w, points: [{ x: pos.x, y: pos.y, p: pr }] } };
       redrawPage(pageId);
     });
     canvas.addEventListener('pointermove', (evt) => {
       if (state.dragImg) {
+        if (evt.pointerId !== state.dragImg.pointerId) return;
         const nb = notebook();
         const pg = nb ? nb.pages.find((p) => p.id === state.dragImg.pageId) : null;
         if (pg) {
@@ -292,18 +330,24 @@
         return;
       }
       const d = state.drawing;
-      if (!d || evt.pointerType === 'touch') return;
+      if (!d || evt.pointerId !== d.pointerId) return;
+      logPen('move', evt);
       for (const e of evt.getCoalescedEvents ? evt.getCoalescedEvents() : [evt]) {
         const pos = canvasPos(canvas, e);
-        d.stroke.points.push({ x: pos.x, y: pos.y, p: e.pressure || 0.5 });
+        d.stroke.points.push({ x: pos.x, y: pos.y, p: penPressure(e) });
       }
       redrawPage(d.pageId);
     });
-    const finish = () => {
-      if (state.dragImg) { state.dragImg = null; scheduleSave(); return; }
+    const finish = (evt) => {
+      if (state.dragImg) {
+        if (evt && evt.pointerId !== state.dragImg.pointerId) return;
+        state.dragImg = null; scheduleSave(); return;
+      }
       const d = state.drawing;
       if (!d) return;
+      if (evt && evt.pointerId !== d.pointerId) return;
       state.drawing = null;
+      canvas.style.touchAction = '';
       const nb = notebook();
       const pg = nb ? nb.pages.find((p) => p.id === d.pageId) : null;
       if (!pg || d.stroke.points.length === 0) { if (pg) redrawPage(pg.id); return; }
@@ -311,16 +355,20 @@
         const hits = scribbleHits(d.stroke.points, pg.strokes);
         if (hits) {
           pg.strokes = pg.strokes.filter((s) => !hits.includes(s.id));
+          state.undoStack = state.undoStack.filter((u) => !hits.includes(u.strokeId));
+          state.redoStack = [];
           toast(`Scribbled out ${hits.length} stroke${hits.length > 1 ? 's' : ''}`);
           scheduleSave(); redrawPage(pg.id); return;
         }
       }
       pg.strokes.push(d.stroke);
-      state.undoStack.push({ pageId: pg.id, strokeId: d.stroke.id });
+      state.undoStack.push({ pageId: pg.id, strokeId: d.stroke.id, stroke: d.stroke });
+      state.redoStack = [];
       scheduleSave(); redrawPage(pg.id);
     };
-    canvas.addEventListener('pointerup', finish);
-    canvas.addEventListener('pointercancel', () => { state.drawing = null; state.dragImg = null; redrawPage(pageId); });
+    canvas.addEventListener('pointerup', (evt) => { logPen('up', evt); finish(evt); });
+    canvas.addEventListener('pointercancel', (evt) => { logPen('cancel', evt); finish(evt); }); // keep partial ink, never drop it
+    canvas.addEventListener('lostpointercapture', (evt) => { logPen('lostcap', evt); finish(evt); });
   }
 
   function mostVisiblePage() {
@@ -338,8 +386,45 @@
     const nb = notebook(); if (!nb) return;
     const id = mostVisiblePage();
     const i = nb.pages.findIndex((p) => p.id === id);
-    $('page-indicator').textContent = i >= 0 ? `Page ${i + 1} / ${nb.pages.length}` : '';
+    $('page-indicator').textContent = i >= 0 ? `${i + 1} / ${nb.pages.length}` : '';
+    $('pg-prev').disabled = i <= 0;
+    $('pg-next').disabled = i < 0 || i >= nb.pages.length - 1;
+    $('pg-del').disabled = nb.pages.length <= 1;
   }
+  function scrollToPage(i) {
+    const nb = notebook(); if (!nb) return;
+    const pg = nb.pages[Math.max(0, Math.min(i, nb.pages.length - 1))];
+    if (!pg) return;
+    const entry = state.canvases.get(pg.id);
+    if (entry) entry.canvas.scrollIntoView({ block: 'start' });
+  }
+  $('pg-prev').onclick = () => {
+    const nb = notebook(); if (!nb) return;
+    const i = nb.pages.findIndex((p) => p.id === mostVisiblePage());
+    scrollToPage(i - 1);
+  };
+  $('pg-next').onclick = () => {
+    const nb = notebook(); if (!nb) return;
+    const i = nb.pages.findIndex((p) => p.id === mostVisiblePage());
+    scrollToPage(i + 1);
+  };
+  $('pg-add').onclick = () => addPage();
+  $('pg-del').onclick = () => {
+    const nb = notebook(); if (!nb) return;
+    deletePage(mostVisiblePage());
+  };
+  function applyTheme(t) {
+    document.body.dataset.theme = t;
+    try { localStorage.setItem('oj-theme', t); } catch (_) {}
+    $('theme-btn').textContent = t === 'light' ? '☾' : '☀';
+  }
+  $('theme-btn').onclick = () => applyTheme(document.body.dataset.theme === 'light' ? 'dark' : 'light');
+  $('penlog-btn').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(state.penLog));
+      toast(`Pen log copied (${state.penLog.length} events)`);
+    } catch (err) { toast('Copy failed: ' + err.message); }
+  };
 
   function addPage() {
     const nb = notebook(); if (!nb) return null;
@@ -355,16 +440,18 @@
   }
 
   async function deletePage(pageId) {
-    const nb = notebook(); if (!nb || nb.pages.length <= 1) { toast('A notebook needs at least one page'); return; }
+    const nb = notebook(); if (!nb || !pageId || nb.pages.length <= 1) { if (nb && nb.pages.length <= 1) toast('A notebook needs at least one page'); return; }
     const pg = nb.pages.find((p) => p.id === pageId);
     if (pg && pg.strokes.length > 0 && !(await modalConfirm('Delete page?', 'This removes the page and its ink.', 'Delete'))) return;
     nb.pages = nb.pages.filter((p) => p.id !== pageId);
     nb.pages.forEach((p, i) => { p.order = i; });
+    state.undoStack = state.undoStack.filter((u) => u.pageId !== pageId);
+    state.redoStack = state.redoStack.filter((r) => r.pageId !== pageId);
     scheduleSave(); buildEditor();
   }
 
   function openNotebook(id) {
-    state.nbId = id; state.undoStack = []; state.zoom = 1;
+    state.nbId = id; state.undoStack = []; state.redoStack = []; state.zoom = 1;
     const nb = notebook();
     if (nb && nb.ruled === undefined) nb.ruled = true;
     state.ruled = nb ? nb.ruled !== false : true;
@@ -436,13 +523,28 @@
     const nb = notebook(); const u = state.undoStack.pop();
     if (!nb || !u) return;
     const pg = nb.pages.find((p) => p.id === u.pageId);
-    if (pg) { pg.strokes = pg.strokes.filter((s) => s.id !== u.strokeId); scheduleSave(); redrawPage(pg.id); }
+    if (pg) {
+      const gone = pg.strokes.find((s) => s.id === u.strokeId);
+      pg.strokes = pg.strokes.filter((s) => s.id !== u.strokeId);
+      if (gone) state.redoStack.push({ pageId: pg.id, stroke: gone });
+      scheduleSave(); redrawPage(pg.id);
+    }
+  };
+  $('redo-btn').onclick = () => {
+    const nb = notebook(); const r = state.redoStack.pop();
+    if (!nb || !r) return;
+    const pg = nb.pages.find((p) => p.id === r.pageId);
+    if (pg && !pg.strokes.some((s) => s.id === r.stroke.id)) {
+      pg.strokes.push(r.stroke);
+      state.undoStack.push({ pageId: pg.id, strokeId: r.stroke.id, stroke: r.stroke });
+      scheduleSave(); redrawPage(pg.id);
+    }
   };
   $('clear-btn').onclick = async () => {
     const nb = notebook(); if (!nb) return;
     const id = mostVisiblePage();
     const pg = nb.pages.find((p) => p.id === id);
-    if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; scheduleSave(); redrawPage(pg.id); }
+    if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; state.undoStack = state.undoStack.filter((u) => u.pageId !== pg.id); state.redoStack = []; scheduleSave(); redrawPage(pg.id); }
   };
   $('image-btn').onclick = async () => {
     if (!Backend) { toast('No backend bridge'); return; }
@@ -503,6 +605,15 @@
   $('hide-btn').onclick = () => setChrome(true);
   $('show-chrome').onclick = () => setChrome(false);
   document.addEventListener('keydown', (e) => {
+    const inField = document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+      if (inField || $('editor-view').hidden) return;
+      e.preventDefault(); $('undo-btn').click(); return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && (e.key === 'z' || e.key === 'Z')))) {
+      if (inField || $('editor-view').hidden) return;
+      e.preventDefault(); $('redo-btn').click(); return;
+    }
     if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedImage) {
       if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
       const nb = notebook();
@@ -595,7 +706,10 @@
 
   /* ================= boot ================= */
   (async () => {
-    $('ver').textContent = 'v0.4';
+    $('ver').textContent = 'v0.5';
+    let theme = 'light';
+    try { theme = localStorage.getItem('oj-theme') || 'light'; } catch (_) {}
+    applyTheme(theme);
     if (!Backend) {
       $('nb-grid').innerHTML = '<p style="opacity:.6">No backend bridge found. Run with <code>npm start</code>.</p>';
       return;
