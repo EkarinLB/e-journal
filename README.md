@@ -15,6 +15,9 @@ not a copy of any Microsoft software.
 - Notebooks with pages, pressure-sensitive pen, highlighter, eraser
 - Colors, stroke width, undo, page add/delete, title search
 - Local JSON library (no account, no cloud), `.openjournal` export/import
+- Read-only `.ink` import: open Microsoft Journal files, pages appear with
+  your ink (stroke editing of imports is on the roadmap)
+- Image insertion with move/delete, ruled paper, zoom, hideable UI
 - Runs on Windows and Linux via Electron
 
 ## Run

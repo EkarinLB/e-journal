@@ -15,6 +15,8 @@
       <input id="search" type="search" placeholder="Search notebooks…" aria-label="Search notebooks">
       <div class="spacer"></div>
       <button id="import-btn" title="Import .openjournal file">Import</button>
+      <button id="import-ink-btn" title="Import Microsoft Journal .ink files (read-only)">Import .ink</button>
+      <input id="ink-file" type="file" accept=".ink" multiple hidden>
       <button id="export-btn" title="Export library to .openjournal">Export</button>
       <button id="add-notebook" class="primary">+ New</button>
     </header>
@@ -40,6 +42,9 @@
       <button data-tool="pen" class="tool active">Pen</button>
       <button data-tool="highlighter" class="tool">Highlighter</button>
       <button data-tool="eraser" class="tool">Eraser</button>
+      <button data-tool="select" class="tool" title="Select and move images">Select</button>
+      <span class="sep"></span>
+      <button id="image-btn" title="Insert image on current page">Image</button>
       <span class="sep"></span>
       <div class="colors" id="colors"></div>
       <input id="width" type="range" min="1" max="24" value="3" title="Stroke width">
@@ -51,8 +56,21 @@
   </section>
 
   <div id="toast" hidden></div>
+  <div id="modal-backdrop" hidden>
+    <div id="modal" role="dialog" aria-modal="true">
+      <h3 id="modal-title"></h3>
+      <p id="modal-body" hidden></p>
+      <input id="modal-input" hidden maxlength="120">
+      <div class="modal-actions">
+        <button id="modal-cancel">Cancel</button>
+        <button id="modal-ok" class="primary">OK</button>
+      </div>
+    </div>
+  </div>
 </div>
+<script src="vendor/sql-wasm.js"></script>
 <script src="../lib/ink.js"></script>
+<script src="inkImport.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>

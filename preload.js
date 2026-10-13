@@ -6,4 +6,6 @@ contextBridge.exposeInMainWorld('oj', {
   saveLibrary: (library) => ipcRenderer.invoke('library:save', library),
   exportLibrary: (library) => ipcRenderer.invoke('library:export', library),
   importLibrary: () => ipcRenderer.invoke('library:import'),
+  pickImage: () => ipcRenderer.invoke('media:pickImage'),
+  sqlWasmBinary: () => ipcRenderer.invoke('util:sqlwasm'),
 });

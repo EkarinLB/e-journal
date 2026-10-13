@@ -40,4 +40,13 @@ assert.strictEqual(loaded.notebooks[0].name, 'Physics');
 const empty = new LibraryStore(path.join(dir, 'does-not-exist.json')).load();
 assert.deepStrictEqual(empty, { notebooks: [] });
 
-console.log('store.test.js: all 4 checks passed');
+// 5. Pages with background + images validate and round-trip.
+const nb2 = createNotebook('Mixed');
+nb2.pages[0].background = 'data:image/png;base64,AAA';
+nb2.pages[0].images = [{ id: 'im1', x: 10, y: 20, w: 300, h: 200, dataUrl: 'data:image/png;base64,BBB' }];
+assert.strictEqual(validateLibrary({ notebooks: [nb2] }).ok, true);
+const back2 = deserializeLibrary(serializeLibrary({ notebooks: [nb2] }));
+assert.strictEqual(back2.notebooks[0].pages[0].images[0].w, 300);
+assert.strictEqual(validateLibrary({ notebooks: [{ id: 'x', name: 'y', pages: [{ id: 'p', strokes: [], images: [{ id: 1 }] }] }] }).ok, false);
+
+console.log('store.test.js: all 5 checks passed');

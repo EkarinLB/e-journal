@@ -52,3 +52,13 @@ body.chrome-hidden #topbar, body.chrome-hidden #island { display: none; }
 #show-chrome { position: absolute; bottom: 14px; right: 14px; z-index: 7; border-radius: 999px; opacity: .7; }
 
 #toast { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); background: #000; color: #fff; padding: 8px 16px; border-radius: 999px; z-index: 20; opacity: .92; }
+
+/* modal (replaces native prompt/confirm, which sandboxed webviews block) */
+#modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 30; }
+#modal-backdrop[hidden] { display: none; }
+#modal { background: var(--panel); border: 1px solid #555; border-radius: 12px; padding: 20px; min-width: 300px; max-width: 420px; }
+#modal h3 { margin: 0 0 8px; }
+#modal p { opacity: .85; }
+#modal-input { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #555; background: #14171c; color: var(--ink); margin: 4px 0 8px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+#modal-ok.danger { background: #a02323; border-color: #a02323; color: #fff; }

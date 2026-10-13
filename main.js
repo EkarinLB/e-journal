@@ -51,3 +51,25 @@ ipcMain.handle('library:import', async () => {
   if (canceled || filePaths.length === 0) return null;
   return fs.readFileSync(filePaths[0], 'utf8');
 });
+
+const IMAGE_EXTS = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp' };
+
+ipcMain.handle('media:pickImage', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || filePaths.length === 0) return null;
+  const ext = path.extname(filePaths[0]).toLowerCase();
+  const mime = IMAGE_EXTS[ext] || 'application/octet-stream';
+  const buf = fs.readFileSync(filePaths[0]);
+  if (buf.length > 12 * 1024 * 1024) throw new Error('Image is larger than 12 MB');
+  return { name: path.basename(filePaths[0]), mime, base64: buf.toString('base64') };
+});
+
+// sql.js wasm binary, so the renderer can init the engine without
+// depending on file:// fetch behavior.
+ipcMain.handle('util:sqlwasm', () => {
+  const buf = fs.readFileSync(path.join(__dirname, 'renderer', 'vendor', 'sql-wasm.wasm'));
+  return new Uint8Array(buf);
+});

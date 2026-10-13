@@ -7,14 +7,49 @@
   const COLORS = ['#101418', '#C92A2A', '#2B6CB0', '#2F9E44', '#E8A100', '#7C3AED', '#FFE14D'];
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 
+  // Backend bridge. Electron exposes window.oj via preload; a Tauri
+  // invoke() adapter with the same four methods + pickImage plugs in here.
+  const Backend = window.oj;
+
+  /* Modal dialogs. Native prompt()/confirm() are blocked in sandboxed
+     webviews (and return null/false), so all user questions go through
+     this in-app modal instead. */
+  function modal({ title, body, input, value, okText, danger }) {
+    return new Promise((resolve) => {
+      $('modal-title').textContent = title;
+      const bodyEl = $('modal-body');
+      if (body) { bodyEl.textContent = body; bodyEl.hidden = false; } else bodyEl.hidden = true;
+      const inputEl = $('modal-input');
+      if (input) { inputEl.hidden = false; inputEl.value = value || ''; } else inputEl.hidden = true;
+      const ok = $('modal-ok');
+      ok.textContent = okText || 'OK';
+      ok.classList.toggle('danger', !!danger);
+      $('modal-backdrop').hidden = false;
+      const done = (v) => {
+        $('modal-backdrop').hidden = true;
+        ok.onclick = cancelBtn.onclick = null;
+        resolve(v);
+      };
+      const cancelBtn = $('modal-cancel');
+      ok.onclick = () => done(input ? inputEl.value.trim() : true);
+      cancelBtn.onclick = () => done(input ? null : false);
+      if (input) { inputEl.focus(); inputEl.select(); }
+    });
+  }
+  const modalInput = (title, value) => modal({ title, input: true, value });
+  const modalConfirm = (title, body, okText) => modal({ title, body, okText: okText || 'Delete', danger: true });
+
   const state = {
     library: { notebooks: [] },
     nbId: null,
     tool: 'pen', color: '#101418', width: 3,
     zoom: 1, ruled: true,
-    drawing: null,           // { pageId, stroke, canvas, ctx }
+    drawing: null,           // { pageId, stroke }
     undoStack: [],           // { pageId, strokeId }
-    canvases: new Map(),     // pageId -> { canvas, ctx }
+    canvases: new Map(),     // pageId -> { canvas, ctx, backing }
+    selectedImage: null,     // image id (select tool)
+    dragImg: null,           // { pageId, imageId, dx, dy }
+    imgCache: new Map(),     // image id -> HTMLImageElement
   };
 
   const notebook = () => state.library.notebooks.find((n) => n.id === state.nbId);
@@ -26,7 +61,7 @@
     saveTimer = setTimeout(() => {
       const nb = notebook();
       if (nb) nb.updatedAt = new Date().toISOString();
-      window.oj.saveLibrary(state.library).catch((e) => toast('Save failed: ' + e.message));
+      Backend.saveLibrary(state.library).catch((e) => toast('Save failed: ' + e.message));
     }, 400);
   }
 
@@ -72,6 +107,38 @@
     ctx.restore();
   }
 
+  function imgEl(image, onReady) {
+    let el = state.imgCache.get(image.id);
+    if (!el) {
+      el = new Image();
+      el.onload = () => onReady && onReady();
+      el.src = image.dataUrl;
+      state.imgCache.set(image.id, el);
+    }
+    return el;
+  }
+
+  function drawImagesOn(ctx, pg, pageId) {
+    for (const im of pg.images || []) {
+      const el = imgEl(im, () => redrawPage(pageId));
+      if (el.complete && el.naturalWidth > 0) {
+        ctx.drawImage(el, im.x, im.y, im.w, im.h);
+        if (state.selectedImage === im.id) {
+          ctx.save();
+          ctx.strokeStyle = '#4fa3cd'; ctx.lineWidth = 3; ctx.setLineDash([10, 6]);
+          ctx.strokeRect(im.x, im.y, im.w, im.h);
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  function drawBackgroundOn(ctx, pg, pageId) {
+    if (!pg.background) return;
+    const el = imgEl({ id: 'bg:' + pg.id, dataUrl: pg.background }, () => redrawPage(pageId));
+    if (el.complete && el.naturalWidth > 0) ctx.drawImage(el, 0, 0, PAGE_W, PAGE_H);
+  }
+
   function redrawPage(pageId) {
     const entry = state.canvases.get(pageId);
     const nb = notebook();
@@ -83,6 +150,8 @@
     ctx.setTransform(entry.backing, 0, 0, entry.backing, 0, 0);
     ctx.clearRect(0, 0, PAGE_W, PAGE_H);
     if (state.ruled) drawRuled(ctx);
+    drawBackgroundOn(ctx, pg, pageId);
+    drawImagesOn(ctx, pg, pageId);
     for (const st of pg.strokes) drawStrokeOn(ctx, st);
     if (state.drawing && state.drawing.pageId === pageId) drawStrokeOn(ctx, state.drawing.stroke);
     ctx.restore();
@@ -172,11 +241,33 @@
         if (eraseAt(pg, pos) > 0) { scheduleSave(); redrawPage(pageId); }
         return;
       }
+      if (state.tool === 'select') {
+        const hit = [...(pg.images || [])].reverse().find((im) =>
+          pos.x >= im.x && pos.x <= im.x + im.w && pos.y >= im.y && pos.y <= im.y + im.h);
+        state.selectedImage = hit ? hit.id : null;
+        if (hit) state.dragImg = { pageId, imageId: hit.id, dx: pos.x - hit.x, dy: pos.y - hit.y };
+        redrawPage(pageId);
+        return;
+      }
       const w = state.tool === 'highlighter' ? Math.max(state.width, 12) : state.width;
       state.drawing = { pageId, stroke: { id: uid(), tool: state.tool, color: state.color, width: w, points: [{ x: pos.x, y: pos.y, p: evt.pressure || 0.5 }] } };
       redrawPage(pageId);
     });
     canvas.addEventListener('pointermove', (evt) => {
+      if (state.dragImg) {
+        const nb = notebook();
+        const pg = nb ? nb.pages.find((p) => p.id === state.dragImg.pageId) : null;
+        if (pg) {
+          const im = (pg.images || []).find((i) => i.id === state.dragImg.imageId);
+          if (im) {
+            const pos = canvasPos(canvas, evt);
+            im.x = Math.min(Math.max(pos.x - state.dragImg.dx, -im.w + 40), PAGE_W - 40);
+            im.y = Math.min(Math.max(pos.y - state.dragImg.dy, -im.h + 40), PAGE_H - 40);
+            redrawPage(pg.id);
+          }
+        }
+        return;
+      }
       const d = state.drawing;
       if (!d || evt.pointerType === 'touch') return;
       for (const e of evt.getCoalescedEvents ? evt.getCoalescedEvents() : [evt]) {
@@ -186,6 +277,7 @@
       redrawPage(d.pageId);
     });
     const finish = () => {
+      if (state.dragImg) { state.dragImg = null; scheduleSave(); return; }
       const d = state.drawing;
       if (!d) return;
       state.drawing = null;
@@ -205,7 +297,7 @@
       scheduleSave(); redrawPage(pg.id);
     };
     canvas.addEventListener('pointerup', finish);
-    canvas.addEventListener('pointercancel', () => { state.drawing = null; redrawPage(pageId); });
+    canvas.addEventListener('pointercancel', () => { state.drawing = null; state.dragImg = null; redrawPage(pageId); });
   }
 
   function mostVisiblePage() {
@@ -239,10 +331,10 @@
     return pg;
   }
 
-  function deletePage(pageId) {
+  async function deletePage(pageId) {
     const nb = notebook(); if (!nb || nb.pages.length <= 1) { toast('A notebook needs at least one page'); return; }
     const pg = nb.pages.find((p) => p.id === pageId);
-    if (pg && pg.strokes.length > 0 && !confirm('Delete this page and its ink?')) return;
+    if (pg && pg.strokes.length > 0 && !(await modalConfirm('Delete page?', 'This removes the page and its ink.', 'Delete'))) return;
     nb.pages = nb.pages.filter((p) => p.id !== pageId);
     nb.pages.forEach((p, i) => { p.order = i; });
     scheduleSave(); buildEditor();
@@ -279,9 +371,9 @@
       s.textContent = `${nb.pages.length} page${nb.pages.length === 1 ? '' : 's'}`;
       const del = document.createElement('button');
       del.className = 'del'; del.textContent = '×'; del.title = 'Delete notebook';
-      del.onclick = (e) => {
+      del.onclick = async (e) => {
         e.stopPropagation();
-        if (confirm(`Delete "${nb.name}"?`)) {
+        if (await modalConfirm(`Delete "${nb.name}"?`, 'The notebook and all its pages will be removed.', 'Delete')) {
           state.library.notebooks = state.library.notebooks.filter((n) => n.id !== nb.id);
           scheduleSave(); renderHome($('search').value);
         }
@@ -294,8 +386,8 @@
   }
 
   /* ================= wiring ================= */
-  $('add-notebook').onclick = () => {
-    const name = prompt('Notebook name:', 'Untitled');
+  $('add-notebook').onclick = async () => {
+    const name = await modalInput('New notebook', 'Untitled');
     if (!name) return;
     const nb = { id: uid(), name, color: COLORS[state.library.notebooks.length % COLORS.length], icon: 'GenericJournal', updatedAt: new Date().toISOString(), pages: [{ id: uid(), order: 0, width: PAGE_W, height: PAGE_H, strokes: [] }] };
     state.library.notebooks.push(nb);
@@ -321,11 +413,35 @@
     const pg = nb.pages.find((p) => p.id === u.pageId);
     if (pg) { pg.strokes = pg.strokes.filter((s) => s.id !== u.strokeId); scheduleSave(); redrawPage(pg.id); }
   };
-  $('clear-btn').onclick = () => {
+  $('clear-btn').onclick = async () => {
     const nb = notebook(); if (!nb) return;
     const id = mostVisiblePage();
     const pg = nb.pages.find((p) => p.id === id);
-    if (pg && pg.strokes.length > 0 && confirm('Clear this page?')) { pg.strokes = []; scheduleSave(); redrawPage(pg.id); }
+    if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; scheduleSave(); redrawPage(pg.id); }
+  };
+  $('image-btn').onclick = async () => {
+    const nb = notebook(); if (!nb) return;
+    const id = mostVisiblePage();
+    const pg = nb.pages.find((p) => p.id === id);
+    if (!pg) return;
+    try {
+      const picked = await Backend.pickImage();
+      if (!picked) return;
+      const dataUrl = `data:${picked.mime};base64,${picked.base64}`;
+      const probe = new Image();
+      probe.onload = () => {
+        const scale = Math.min(1, 720 / probe.naturalWidth);
+        const w = Math.round(probe.naturalWidth * scale), h = Math.round(probe.naturalHeight * scale);
+        const im = { id: uid(), x: Math.round((PAGE_W - w) / 2), y: 160, w, h, dataUrl };
+        pg.images = pg.images || [];
+        pg.images.push(im);
+        state.selectedImage = im.id;
+        scheduleSave(); redrawPage(pg.id);
+        toast('Image added — use Select to move it');
+      };
+      probe.onerror = () => toast('Could not read that image');
+      probe.src = dataUrl;
+    } catch (err) { toast('Image insert failed: ' + err.message); }
   };
   $('lines-btn').onclick = () => {
     state.ruled = !state.ruled;
@@ -361,10 +477,26 @@
   $('hide-btn').onclick = () => setChrome(true);
   $('show-chrome').onclick = () => setChrome(false);
   document.addEventListener('keydown', (e) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedImage) {
+      if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+      const nb = notebook();
+      const pg = nb ? nb.pages.find((p) => (p.images || []).some((i) => i.id === state.selectedImage)) : null;
+      if (pg) {
+        pg.images = pg.images.filter((i) => i.id !== state.selectedImage);
+        state.imgCache.delete(state.selectedImage);
+        state.selectedImage = null;
+        scheduleSave(); redrawPage(pg.id);
+        e.preventDefault();
+      }
+      return;
+    }
     if (e.key === 'h' || e.key === 'H') {
       if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
       if (!$('editor-view').hidden) setChrome(!document.body.classList.contains('chrome-hidden'));
-    } else if (e.key === 'Escape') setChrome(false);
+    } else if (e.key === 'Escape') { setChrome(false); state.selectedImage = null;
+    const nb = notebook();
+    if (nb && !$('editor-view').hidden) for (const p of nb.pages) redrawPage(p.id);
+  }
   });
 
   /* infinite scroll → new page */
@@ -383,10 +515,28 @@
     }, 250);
   });
 
-  $('export-btn').onclick = () => window.oj.exportLibrary(state.library).catch((e) => toast(e.message));
+  $('export-btn').onclick = () => Backend.exportLibrary(state.library).catch((e) => toast(e.message));
+  $('import-ink-btn').onclick = () => $('ink-file').click();
+  $('ink-file').onchange = async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    for (const f of files) {
+      try {
+        toast(`Reading ${f.name}…`);
+        const buf = await f.arrayBuffer();
+        const { notebook: nb, pagesWithArt } = await window.InkImport.importInkFile(buf, f.name, uid);
+        state.library.notebooks.push(nb);
+        scheduleSave(); renderHome($('search').value);
+        toast(`Imported "${nb.name}": ${nb.pages.length} pages (${pagesWithArt} with ink)`);
+      } catch (err) {
+        console.error(err);
+        toast(`Could not import ${f.name}: ${err.message}`);
+      }
+    }
+  };
   $('import-btn').onclick = async () => {
     try {
-      const text = await window.oj.importLibrary();
+      const text = await Backend.importLibrary();
       if (!text) return;
       const data = JSON.parse(text);
       if (!Array.isArray(data.notebooks)) throw new Error('bad file');
@@ -398,10 +548,10 @@
 
   /* ================= boot ================= */
   (async () => {
-    state.library = await window.oj.loadLibrary();
+    state.library = await Backend.loadLibrary();
     for (const nb of state.library.notebooks) {
       if (nb.ruled === undefined) nb.ruled = true;
-      nb.pages.forEach((pg, i) => { pg.order = i; pg.width = PAGE_W; pg.height = PAGE_H; });
+      nb.pages.forEach((pg, i) => { pg.order = i; pg.width = PAGE_W; pg.height = PAGE_H; pg.images = pg.images || []; });
     }
     renderHome();
   })().catch(console.error);
