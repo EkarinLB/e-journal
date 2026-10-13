@@ -1,7 +1,7 @@
 'use strict';
 // Scribble + smoothing checks. Run with: npm test
 const assert = require('assert');
-const Ink = require('../lib/ink');
+const Ink = require('../renderer/ink');
 
 function line(x0, y0, x1, y1, n, jitter) {
   const pts = [];

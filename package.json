@@ -5,11 +5,13 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "tauri": "tauri",
     "test": "node test/store.test.js && node test/ink.test.js"
   },
   "license": "MIT",
   "devDependencies": {
-    "electron": "^37.0.0"
+    "electron": "^37.0.0",
+    "@tauri-apps/cli": "^2.0.0"
   },
   "dependencies": {
     "sql.js": "^1.14.2"

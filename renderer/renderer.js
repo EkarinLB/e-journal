@@ -7,9 +7,25 @@
   const COLORS = ['#101418', '#C92A2A', '#2B6CB0', '#2F9E44', '#E8A100', '#7C3AED', '#FFE14D'];
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 
-  // Backend bridge. Electron exposes window.oj via preload; a Tauri
-  // invoke() adapter with the same four methods + pickImage plugs in here.
-  const Backend = window.oj;
+  // Backend bridge. Electron exposes window.oj via preload; under Tauri
+  // the same surface is built on window.__TAURI__.core.invoke.
+  const Backend = (() => {
+    if (window.oj) return window.oj;
+    const core = window.__TAURI__ && window.__TAURI__.core;
+    if (core) {
+      const invoke = (...args) => core.invoke(...args);
+      return {
+        loadLibrary: () => invoke('library_load'),
+        saveLibrary: (library) => invoke('library_save', { library }),
+        exportLibrary: (library) => invoke('library_export', { library }),
+        importLibrary: () => invoke('library_import'),
+        pickImage: () => invoke('media_pick_image'),
+        sqlWasmBinary: () => invoke('util_sqlwasm').then((a) => new Uint8Array(a)),
+      };
+    }
+    return null;
+  })();
+  if (Backend && !window.oj) window.oj = Backend; // inkImport reads window.oj
 
   /* Modal dialogs. Native prompt()/confirm() are blocked in sandboxed
      webviews (and return null/false), so all user questions go through
@@ -548,6 +564,10 @@
 
   /* ================= boot ================= */
   (async () => {
+    if (!Backend) {
+      $('nb-grid').innerHTML = '<p style="opacity:.6">No backend bridge found. Run with <code>npm start</code>.</p>';
+      return;
+    }
     state.library = await Backend.loadLibrary();
     for (const nb of state.library.notebooks) {
       if (nb.ruled === undefined) nb.ruled = true;
