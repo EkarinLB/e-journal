@@ -51,8 +51,8 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 #page-indicator { min-width: 64px; text-align: center; color: var(--ink-soft); font-size: 13px; }
 button.toggle { opacity: .55; }
 button.toggle.active { opacity: 1; border-color: var(--accent); color: var(--ink); }
-#pages { flex: 1; overflow-y: auto; padding: 20px 0 140px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-.sheet canvas { background: #f7f3ea; border-radius: 3px; box-shadow: var(--shadow); touch-action: pan-y; cursor: crosshair; display: block; }
+#pages { flex: 1; overflow-y: auto; padding: 20px 0 140px; display: flex; flex-direction: column; align-items: center; gap: 24px; touch-action: none; }
+.sheet canvas { background: #f7f3ea; border-radius: 3px; box-shadow: var(--shadow); touch-action: none; cursor: crosshair; display: block; }
 #end-zone { display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: .85; }
 #scroll-hint { font-size: 13px; color: var(--ink-soft); }
 
