@@ -2,7 +2,15 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { LibraryStore } = require('./lib/store');
+const { parseInkDb, buildNotebook } = require('./lib/inkfile');
+
+let sqlEngine = null;
+async function sqlite() {
+  if (!sqlEngine) sqlEngine = await require('sql.js')();
+  return sqlEngine;
+}
 
 let store;
 let win;
@@ -52,6 +60,18 @@ ipcMain.handle('library:import', async () => {
   return fs.readFileSync(filePaths[0], 'utf8');
 });
 
+// .ink parsing runs in the main process: Node's sql.js reads its wasm
+// straight from disk, unaffected by file:// fetch restrictions.
+ipcMain.handle('ink:parse', async (_evt, bytes, fileName) => {
+  const SQL = await sqlite();
+  const db = new SQL.Database(new Uint8Array(bytes));
+  try {
+    return buildNotebook(parseInkDb(db), fileName, () => crypto.randomUUID());
+  } finally {
+    db.close();
+  }
+});
+
 const IMAGE_EXTS = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp' };
 
 ipcMain.handle('media:pickImage', async () => {
@@ -67,9 +87,9 @@ ipcMain.handle('media:pickImage', async () => {
   return { name: path.basename(filePaths[0]), mime, base64: buf.toString('base64') };
 });
 
-// sql.js wasm binary, so the renderer can init the engine without
-// depending on file:// fetch behavior.
+// sql.js wasm binary as a transferable ArrayBuffer, so the renderer can
+// init the engine without depending on file:// fetch behavior.
 ipcMain.handle('util:sqlwasm', () => {
   const buf = fs.readFileSync(path.join(__dirname, 'renderer', 'vendor', 'sql-wasm.wasm'));
-  return new Uint8Array(buf);
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 });

@@ -50,6 +50,7 @@
       ok.onclick = () => done(input ? inputEl.value.trim() : true);
       cancelBtn.onclick = () => done(input ? null : false);
       if (input) { inputEl.focus(); inputEl.select(); }
+      inputEl.onkeydown = (ev) => { if (ev.key === 'Enter') ok.onclick(); };
     });
   }
   const modalInput = (title, value) => modal({ title, input: true, value });
