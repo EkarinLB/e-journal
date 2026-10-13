@@ -136,7 +136,9 @@ fn library_import(app: AppHandle) -> Result<Option<String>, String> {
         return Ok(None);
     };
     let fs_path = file_path.into_path().map_err(|e| e.to_string())?;
-    Ok(Some(fs::read_to_string(fs_path).map_err(|e| e.to_string())?))
+    Ok(Some(
+        fs::read_to_string(fs_path).map_err(|e| e.to_string())?,
+    ))
 }
 
 #[derive(serde::Serialize)]
