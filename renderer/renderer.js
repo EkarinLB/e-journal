@@ -89,6 +89,12 @@
     toast._h = setTimeout(() => { t.hidden = true; }, 2200);
   }
 
+  // Surface silent failures visibly instead of dying quietly.
+  window.addEventListener('error', (e) => { try { toast('Error: ' + (e.message || 'unknown error')); } catch (_) {} });
+  window.addEventListener('unhandledrejection', (e) => {
+    try { toast('Error: ' + ((e.reason && e.reason.message) || e.reason || 'unknown')); } catch (_) {}
+  });
+
   /* Ink geometry + gestures: shared implementation in lib/ink.js (unit-tested). */
   const { smoothPoints, scribbleHits } = window.Ink;
 
@@ -396,7 +402,7 @@
         }
       };
       card.append(h, s, del);
-      card.onclick = () => openNotebook(nb.id);
+      card.onclick = () => { try { openNotebook(nb.id); } catch (err) { toast('Could not open: ' + err.message); } };
       grid.appendChild(card);
     }
     if (nbs.length === 0) grid.innerHTML = '<p style="opacity:.6">No notebooks yet — press + New to start one.</p>';
@@ -406,9 +412,11 @@
   $('add-notebook').onclick = async () => {
     const name = await modalInput('New notebook', 'Untitled');
     if (!name) return;
-    const nb = { id: uid(), name, color: COLORS[state.library.notebooks.length % COLORS.length], icon: 'GenericJournal', updatedAt: new Date().toISOString(), pages: [{ id: uid(), order: 0, width: PAGE_W, height: PAGE_H, strokes: [] }] };
-    state.library.notebooks.push(nb);
-    scheduleSave(); openNotebook(nb.id);
+    try {
+      const nb = { id: uid(), name, color: COLORS[state.library.notebooks.length % COLORS.length], icon: 'GenericJournal', updatedAt: new Date().toISOString(), pages: [{ id: uid(), order: 0, width: PAGE_W, height: PAGE_H, strokes: [] }] };
+      state.library.notebooks.push(nb);
+      scheduleSave(); openNotebook(nb.id);
+    } catch (err) { toast('Could not create: ' + err.message); }
   };
   $('search').oninput = (e) => renderHome(e.target.value);
   $('back-btn').onclick = goHome;
@@ -437,6 +445,7 @@
     if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; scheduleSave(); redrawPage(pg.id); }
   };
   $('image-btn').onclick = async () => {
+    if (!Backend) { toast('No backend bridge'); return; }
     const nb = notebook(); if (!nb) return;
     const id = mostVisiblePage();
     const pg = nb.pages.find((p) => p.id === id);
@@ -532,26 +541,47 @@
     }, 250);
   });
 
-  $('export-btn').onclick = () => Backend.exportLibrary(state.library).catch((e) => toast(e.message));
-  $('import-ink-btn').onclick = () => $('ink-file').click();
+  $('export-btn').onclick = () => { if (!Backend) { toast('No backend bridge'); return; } Backend.exportLibrary(state.library).catch((e) => toast(e.message)); };
+  async function importPickedInk(data, name) {
+    try {
+      toast(`Reading ${name}…`);
+      const buf = data instanceof Uint8Array
+        ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+        : data;
+      const { notebook: nb, pagesWithArt } = await window.InkImport.importInkFile(buf, name, uid);
+      state.library.notebooks.push(nb);
+      scheduleSave(); renderHome($('search').value);
+      toast(`Imported "${nb.name}": ${nb.pages.length} pages (${pagesWithArt} with ink)`);
+    } catch (err) {
+      console.error(err);
+      toast(`Could not import ${name}: ${err.message}`);
+    }
+  }
+  $('import-ink-btn').onclick = async () => {
+    if (!Backend) { toast('No backend bridge'); return; }
+    // Prefer the main-process picker (always works); the hidden file
+    // input is a fallback for hosts without it.
+    if (Backend.pickInk) {
+      try {
+        const files = await Backend.pickInk();
+        for (const f of files || []) await importPickedInk(f.bytes, f.name);
+      } catch (err) { toast('Pick failed: ' + err.message); }
+      return;
+    }
+    $('ink-file').click();
+  };
   $('ink-file').onchange = async (e) => {
     const files = [...e.target.files];
     e.target.value = '';
     for (const f of files) {
       try {
-        toast(`Reading ${f.name}…`);
         const buf = await f.arrayBuffer();
-        const { notebook: nb, pagesWithArt } = await window.InkImport.importInkFile(buf, f.name, uid);
-        state.library.notebooks.push(nb);
-        scheduleSave(); renderHome($('search').value);
-        toast(`Imported "${nb.name}": ${nb.pages.length} pages (${pagesWithArt} with ink)`);
-      } catch (err) {
-        console.error(err);
-        toast(`Could not import ${f.name}: ${err.message}`);
-      }
+        await importPickedInk(new Uint8Array(buf), f.name);
+      } catch (err) { toast(`Could not read ${f.name}: ${err.message}`); }
     }
   };
   $('import-btn').onclick = async () => {
+    if (!Backend) { toast('No backend bridge'); return; }
     try {
       const text = await Backend.importLibrary();
       if (!text) return;
@@ -565,6 +595,7 @@
 
   /* ================= boot ================= */
   (async () => {
+    $('ver').textContent = 'v0.4';
     if (!Backend) {
       $('nb-grid').innerHTML = '<p style="opacity:.6">No backend bridge found. Run with <code>npm start</code>.</p>';
       return;

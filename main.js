@@ -60,6 +60,21 @@ ipcMain.handle('library:import', async () => {
   return fs.readFileSync(filePaths[0], 'utf8');
 });
 
+// .ink file picker + read, so the renderer never depends on
+// programmatic <input type=file> clicks (blocked in some webviews).
+ipcMain.handle('ink:pick', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    filters: [{ name: 'Journal ink', extensions: ['ink'] }],
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (canceled || filePaths.length === 0) return [];
+  return filePaths.slice(0, 10).map((p) => {
+    const buf = fs.readFileSync(p);
+    if (buf.length > 25 * 1024 * 1024) throw new Error(path.basename(p) + ' is larger than 25 MB');
+    return { name: path.basename(p), bytes: new Uint8Array(buf) };
+  });
+});
+
 // .ink parsing runs in the main process: Node's sql.js reads its wasm
 // straight from disk, unaffected by file:// fetch restrictions.
 ipcMain.handle('ink:parse', async (_evt, bytes, fileName) => {
