@@ -1,5 +1,6 @@
 :root { --bg: #1b1e24; --panel: #23272f; --ink: #e8e8e8; --accent: #4fa3cd; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
 #app { height: 100vh; }
