@@ -59,7 +59,7 @@
   const state = {
     library: { notebooks: [] },
     nbId: null,
-    tool: 'pen', color: '#101418', width: 3,
+    tool: 'pen', color: '#101418', width: 3, penStyle: 'fountain',
     zoom: 1, ruled: true,
     drawing: null,           // { pageId, pointerId, pointerType, stroke, startedAt }
     undoStack: [],           // { pageId, strokeId, stroke }
@@ -73,10 +73,12 @@
 
   // Pen diagnostics: lightweight ring buffer. The topbar "pen log" button
   // copies it for analysis after a misbehaving stroke.
+  // window.__penLog mirrors it for automated diagnostics.
   function logPen(phase, evt) {
     try {
       state.penLog.push({ t: Date.now(), ph: phase, ty: evt.pointerType, id: evt.pointerId, b: evt.buttons, p: evt.pressure, x: Math.round(evt.clientX), y: Math.round(evt.clientY) });
       if (state.penLog.length > 400) state.penLog.splice(0, state.penLog.length - 400);
+      window.__penLog = state.penLog;
     } catch (_) {}
   }
   function penPressure(evt) {
@@ -117,21 +119,46 @@
   const { smoothPoints, scribbleHits } = window.Ink;
 
   /* ================= drawing ================= */
+  // Pen nib physics per style. Legacy strokes (no penStyle) keep the
+  // original width*pressure mapping so old notes never change looks.
+  function strokeWidthAt(st, p) {
+    const w = st.width, q = p || 0.5;
+    switch (st.penStyle || (st.tool === 'pencil' ? 'pencil' : 'legacy')) {
+      case 'ball': return w;
+      case 'brush': return Math.max(0.5, w * (0.3 + 1.5 * q));
+      case 'fountain': return Math.max(0.5, w * (0.45 + 0.9 * q));
+      case 'pencil': return Math.max(0.5, w * q);
+      case 'legacy':
+      default: return Math.max(0.5, w * q);
+    }
+  }
   function drawStrokeOn(ctx, st) {
     const pts = smoothPoints(st.points);
     if (pts.length === 0) return;
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = st.color;
-    ctx.globalAlpha = st.tool === 'highlighter' ? 0.45 : st.tool === 'pencil' ? 0.85 : 1;
+    if (st.tool === 'highlighter') {
+      // One continuous translucent band. Stroking segment-by-segment would
+      // stack alpha at every joint and look like a streaky thick pen.
+      ctx.globalAlpha = 0.32;
+      ctx.lineWidth = st.width;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+      if (pts.length === 1) { ctx.fillStyle = st.color; ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, st.width / 2, 0, 7); ctx.fill(); }
+      ctx.restore(); return;
+    }
+    ctx.globalAlpha = st.tool === 'pencil' ? 0.85 : 1;
     if (pts.length === 1) {
       ctx.fillStyle = st.color;
-      ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, (st.width * (pts[0].p || 0.5)) / 2, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, strokeWidthAt(st, pts[0].p) / 2, 0, 7); ctx.fill();
       ctx.restore(); return;
     }
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1], b = pts[i];
-      ctx.lineWidth = Math.max(0.5, st.width * (((a.p || 0.5) + (b.p || 0.5)) / 2));
+      ctx.lineWidth = strokeWidthAt(st, ((a.p || 0.5) + (b.p || 0.5)) / 2);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
     ctx.restore();
@@ -190,6 +217,8 @@
     ctx.save();
     ctx.setTransform(entry.backing, 0, 0, entry.backing, 0, 0);
     ctx.clearRect(0, 0, PAGE_W, PAGE_H);
+    ctx.fillStyle = '#f7f3ea'; // paper: painted in-canvas so pixels/exports are correct, not just CSS
+    ctx.fillRect(0, 0, PAGE_W, PAGE_H);
     if (state.ruled) drawRuled(ctx);
     drawBackgroundOn(ctx, pg, pageId);
     drawImagesOn(ctx, pg, pageId);
@@ -310,7 +339,8 @@
       if (evt.pointerType === 'pen') canvas.style.touchAction = 'none';
       const w = state.tool === 'highlighter' ? Math.max(state.width, 12) : state.width;
       const pr = penPressure(evt);
-      state.drawing = { pageId, pointerId: evt.pointerId, pointerType: evt.pointerType, startedAt: Date.now(), stroke: { id: uid(), tool: state.tool, color: state.color, width: w, points: [{ x: pos.x, y: pos.y, p: pr }] } };
+      const style = state.tool === 'pen' ? state.penStyle : undefined;
+      state.drawing = { pageId, pointerId: evt.pointerId, pointerType: evt.pointerType, startedAt: Date.now(), stroke: { id: uid(), tool: state.tool, color: state.color, width: w, penStyle: style, points: [{ x: pos.x, y: pos.y, p: pr }] } };
       redrawPage(pageId);
     });
     canvas.addEventListener('pointermove', (evt) => {
@@ -436,7 +466,10 @@
     scheduleSave(); buildEditor();
     requestAnimationFrame(() => {
       const entry = state.canvases.get(pg.id);
-      if (entry) entry.canvas.scrollIntoView({ block: 'start' });
+      if (entry) {
+        entry.canvas.scrollIntoView({ block: 'start' });
+        entry.canvas.closest('.sheet')?.classList.add('sheet-enter');
+      }
       toast('New page added');
     });
     return pg;
@@ -460,11 +493,15 @@
     state.ruled = nb ? nb.ruled !== false : true;
     $('lines-btn').classList.toggle('active', state.ruled);
     $('home-view').hidden = true; $('editor-view').hidden = false;
+    const ev = $('editor-view');
+    ev.classList.remove('view-enter'); void ev.offsetWidth; ev.classList.add('view-enter');
     buildEditor();
   }
   function goHome() {
     state.nbId = null;
     $('editor-view').hidden = true; $('home-view').hidden = false;
+    const hv = $('home-view');
+    hv.classList.remove('view-enter'); void hv.offsetWidth; hv.classList.add('view-enter');
     document.body.classList.remove('chrome-hidden'); $('show-chrome').hidden = true;
     renderHome($('search').value);
   }
@@ -513,14 +550,50 @@
   document.querySelectorAll('#island .tool').forEach((b) => {
     b.onclick = () => { document.querySelectorAll('#island .tool').forEach((x) => x.classList.remove('active')); b.classList.add('active'); state.tool = b.dataset.tool; };
   });
-  const colorBox = $('colors');
-  for (const c of COLORS) {
-    const s = document.createElement('div');
-    s.className = 'swatch' + (c === state.color ? ' active' : '');
-    s.style.background = c; s.title = c;
-    s.onclick = () => { state.color = c; document.querySelectorAll('.swatch').forEach((x) => x.classList.remove('active')); s.classList.add('active'); };
-    colorBox.appendChild(s);
+  const FULL_PALETTE = ['#000000', '#3b3b3b', '#6b6b6b', '#a8a8a8', '#c92a2a', '#e8590c',
+    '#e8a100', '#ffe14d', '#2f9e44', '#0ca678', '#1098ad', '#2b6cb0',
+    '#364fc7', '#7c3aed', '#c2255c', '#a61e4d', '#5c3d2e', '#8a6d3b'];
+
+  function paintSwatches(box, colors) {
+    box.innerHTML = '';
+    for (const c of colors) {
+      const s = document.createElement('div');
+      s.className = 'swatch' + (c.toLowerCase() === state.color.toLowerCase() ? ' active' : '');
+      s.style.background = c; s.title = c; s.dataset.color = c;
+      s.onclick = () => selectColor(c);
+      box.appendChild(s);
+    }
   }
+  function selectColor(c, closePop = true) {
+    state.color = c;
+    try { localStorage.setItem('oj-color', c); } catch (_) {}
+    document.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x.dataset.color.toLowerCase() === c.toLowerCase()));
+    $('style-dot').style.background = c;
+    if (closePop) $('stylepop').hidden = true;
+  }
+  function selectPenStyle(name, closePop = true) {
+    state.penStyle = name;
+    try { localStorage.setItem('oj-penstyle', name); } catch (_) {}
+    document.querySelectorAll('#pop-styles button').forEach((x) => x.classList.toggle('active', x.dataset.style === name));
+    if (closePop) $('stylepop').hidden = true;
+  }
+  try {
+    const sc = localStorage.getItem('oj-color');
+    if (sc) state.color = sc;
+    const sp = localStorage.getItem('oj-penstyle');
+    if (sp === 'ball' || sp === 'fountain' || sp === 'brush') state.penStyle = sp;
+  } catch (_) {}
+  paintSwatches($('colors'), COLORS);
+  paintSwatches($('pop-colors'), FULL_PALETTE);
+  document.querySelectorAll('#pop-styles button').forEach((b) => { b.onclick = () => selectPenStyle(b.dataset.style); });
+  selectPenStyle(state.penStyle, false);
+  $('custom-color').oninput = (e) => selectColor(e.target.value, false);
+  $('custom-color').onchange = () => { $('stylepop').hidden = true; };
+  $('style-btn').onclick = (e) => { e.stopPropagation(); $('stylepop').hidden = !$('stylepop').hidden; };
+  document.addEventListener('pointerdown', (e) => {
+    const pop = $('stylepop');
+    if (!pop.hidden && !pop.contains(e.target) && e.target !== $('style-btn') && !$('style-btn').contains(e.target)) pop.hidden = true;
+  });
   $('width').oninput = (e) => { state.width = Number(e.target.value); };
   $('undo-btn').onclick = () => {
     const nb = notebook(); const u = state.undoStack.pop();
@@ -549,31 +622,87 @@
     const pg = nb.pages.find((p) => p.id === id);
     if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; state.undoStack = state.undoStack.filter((u) => u.pageId !== pg.id); state.redoStack = []; scheduleSave(); redrawPage(pg.id); }
   };
-  $('image-btn').onclick = async () => {
-    if (!Backend) { toast('No backend bridge'); return; }
+  function insertImageDataUrl(dataUrl, name, x, y) {
     const nb = notebook(); if (!nb) return;
     const id = mostVisiblePage();
     const pg = nb.pages.find((p) => p.id === id);
     if (!pg) return;
+    const probe = new Image();
+    probe.onload = () => {
+      const scale = Math.min(1, 720 / probe.naturalWidth);
+      const w = Math.round(probe.naturalWidth * scale), h = Math.round(probe.naturalHeight * scale);
+      const im = {
+        id: uid(),
+        x: x === undefined ? Math.round((PAGE_W - w) / 2) : Math.round(Math.min(Math.max(x - w / 2, -w + 40), PAGE_W - 40)),
+        y: y === undefined ? 160 : Math.round(Math.min(Math.max(y - h / 2, -h + 40), PAGE_H - 40)),
+        w, h, dataUrl,
+      };
+      pg.images = pg.images || [];
+      pg.images.push(im);
+      state.selectedImage = im.id;
+      // select tool not required to see it; keep current tool
+      scheduleSave(); redrawPage(pg.id);
+      toast(`Image added — use Select to move it`);
+    };
+    probe.onerror = () => toast('Could not read image' + (name ? `: ${name}` : ''));
+    probe.src = dataUrl;
+  }
+  $('image-btn').onclick = async () => {
+    if (!Backend) { toast('No backend bridge'); return; }
     try {
       const picked = await Backend.pickImage();
       if (!picked) return;
-      const dataUrl = `data:${picked.mime};base64,${picked.base64}`;
-      const probe = new Image();
-      probe.onload = () => {
-        const scale = Math.min(1, 720 / probe.naturalWidth);
-        const w = Math.round(probe.naturalWidth * scale), h = Math.round(probe.naturalHeight * scale);
-        const im = { id: uid(), x: Math.round((PAGE_W - w) / 2), y: 160, w, h, dataUrl };
-        pg.images = pg.images || [];
-        pg.images.push(im);
-        state.selectedImage = im.id;
-        scheduleSave(); redrawPage(pg.id);
-        toast('Image added — use Select to move it');
-      };
-      probe.onerror = () => toast('Could not read that image');
-      probe.src = dataUrl;
+      insertImageDataUrl(`data:${picked.mime};base64,${picked.base64}`, picked.name);
     } catch (err) { toast('Image insert failed: ' + err.message); }
   };
+  function readAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = () => reject(new Error('unreadable file'));
+      fr.readAsDataURL(file);
+    });
+  }
+  const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp)$/i;
+  const pagesZone = $('pages');
+  pagesZone.addEventListener('dragover', (e) => { e.preventDefault(); pagesZone.classList.add('dropping'); });
+  pagesZone.addEventListener('dragleave', () => pagesZone.classList.remove('dropping'));
+  pagesZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    pagesZone.classList.remove('dropping');
+    const files = [...(e.dataTransfer ? e.dataTransfer.files : [])].filter((f) => IMAGE_RE.test(f.name));
+    if (files.length === 0) { toast('Drop image files onto a page'); return; }
+    const canvas = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.sheet')?.querySelector?.('canvas');
+    let x, y;
+    if (canvas) { const pos = canvasPos(canvas, e); x = pos.x; y = pos.y; }
+    for (const [i, f] of files.slice(0, 6).entries()) {
+      try {
+        const url = await readAsDataUrl(f);
+        insertImageDataUrl(url, f.name, x === undefined ? undefined : x + i * 24, y === undefined ? undefined : y + i * 24);
+      } catch (err) { toast(`Could not read ${f.name}`); }
+    }
+  });
+  const gridZone = $('nb-grid');
+  gridZone.addEventListener('dragover', (e) => { e.preventDefault(); gridZone.classList.add('dropping'); });
+  gridZone.addEventListener('dragleave', () => gridZone.classList.remove('dropping'));
+  gridZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    gridZone.classList.remove('dropping');
+    for (const f of [...(e.dataTransfer ? e.dataTransfer.files : [])]) {
+      try {
+        if (/\.ink$/i.test(f.name)) {
+          const buf = await f.arrayBuffer();
+          await importPickedInk(new Uint8Array(buf), f.name);
+        } else if (/\.openjournal$/i.test(f.name)) {
+          const text = await f.text();
+          const data = JSON.parse(text);
+          if (!Array.isArray(data.notebooks)) throw new Error('bad file');
+          for (const nb of data.notebooks) { nb.id = uid(); for (const pg of nb.pages || []) pg.id = uid(); state.library.notebooks.push(nb); }
+          scheduleSave(); renderHome($('search').value); toast(`Imported ${f.name}`);
+        }
+      } catch (err) { toast(`Could not import ${f.name}: ${err.message}`); }
+    }
+  });
   $('lines-btn').onclick = () => {
     state.ruled = !state.ruled;
     $('lines-btn').classList.toggle('active', state.ruled);
@@ -709,7 +838,7 @@
 
   /* ================= boot ================= */
   (async () => {
-    $('ver').textContent = 'v0.6';
+    $('ver').textContent = 'v0.7';
     let theme = 'light';
     try { theme = localStorage.getItem('oj-theme') || 'light'; } catch (_) {}
     applyTheme(theme);

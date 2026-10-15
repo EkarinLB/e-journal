@@ -33,13 +33,21 @@ assert.deepStrictEqual(hits, ['w1']);
 const underline = line(90, 230, 410, 230, 20);
 assert.strictEqual(Ink.scribbleHits(underline, [word]), null);
 
-// 4. A loop around ink deletes it (self-intersection path).
+// 4. A loop around ink must NOT delete it (circling is not scratching out).
 const loop = [];
 for (let i = 0; i <= 40; i++) {
   const a = (i / 40) * Math.PI * 2;
   loop.push({ x: 250 + Math.cos(a) * 90, y: 200 + Math.sin(a) * 60, p: 0.5 });
 }
-assert.deepStrictEqual(Ink.scribbleHits(loop, [word]), ['w1']);
+assert.strictEqual(Ink.scribbleHits(loop, [word]), null);
+
+// 5. A wavy underline over ink must NOT delete it.
+const wavy = [];
+for (let i = 0; i < 60; i++) {
+  const x = 90 + (320 * i) / 59;
+  wavy.push({ x, y: 232 + Math.sin(x / 18) * 14, p: 0.5 });
+}
+assert.strictEqual(Ink.scribbleHits(wavy, [word]), null);
 
 // 5. Scribble over empty space hits nothing.
 assert.strictEqual(Ink.scribbleHits(scribble, [{ id: 'far', points: line(0, 900, 300, 900, 10) }]), null);

@@ -47,8 +47,10 @@
     return pts;
   }
 
-  // Returns array of hit stroke ids when `gesture` is a scribble over
-  // existing strokes, else null. A plain underline must NOT match.
+  // Returns array of hit stroke ids when `gesture` is a genuine
+  // scratch-out (rapid zigzag over existing strokes), else null.
+  // Loops, circles, wavy underlines, and cursive words must NEVER match:
+  // only repeated direction reversals count, and only with intersections.
   function scribbleHits(gesture, strokes) {
     if (!gesture || gesture.length < 4 || !strokes || strokes.length === 0) return null;
     const g = downsample(gesture, 160);
@@ -66,6 +68,8 @@
       }
     }
     if (hit.size === 0) return null;
+    // Direction reversals: a true scratch-out zigzags hard. A circle
+    // reverses ~4 times total and cursive drift stays low; demand 6+.
     let reversals = 0, px = 0, py = 0;
     for (let i = 1; i < g.length; i++) {
       const dx = Math.sign(g[i].x - g[i - 1].x), dy = Math.sign(g[i].y - g[i - 1].y);
@@ -74,15 +78,7 @@
       if (dx !== 0) px = dx;
       if (dy !== 0) py = dy;
     }
-    let selfX = 0;
-    for (let i = 1; i < g.length && selfX < 2; i++) {
-      for (let j = i + 2; j < g.length; j++) {
-        if (segInt(g[i - 1], g[i], g[j - 1], g[j])) { selfX++; break; }
-      }
-    }
-    const L = strokeLength(g);
-    const C = Math.hypot(g[g.length - 1].x - g[0].x, g[g.length - 1].y - g[0].y) || 1;
-    if (selfX > 0 || reversals >= 4 || L > 4 * C) return [...hit];
+    if (reversals >= 6) return [...hit];
     return null;
   }
 

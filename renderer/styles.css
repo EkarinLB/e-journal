@@ -21,7 +21,9 @@ body[data-theme="dark"] {
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--ink); font: 14px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; }
 #app { height: 100vh; }
-button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--btn-border); background: var(--btn); color: var(--ink); cursor: pointer; font: inherit; }
+button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--btn-border); background: var(--btn); color: var(--ink); cursor: pointer; font: inherit; transition: background .12s, transform .08s; }
+button:hover:not(:disabled) { background: var(--btn-hover); }
+button:active:not(:disabled) { transform: scale(.94); }
 button:hover:not(:disabled) { background: var(--btn-hover); }
 button:disabled { opacity: .4; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
@@ -70,7 +72,9 @@ button.tool.active { background: var(--accent); border-color: var(--accent); col
 #width { width: 90px; accent-color: var(--accent); }
 
 /* hidden chrome */
-body.chrome-hidden #topbar, body.chrome-hidden #island { display: none; }
+#topbar, #island { transition: opacity .18s ease, transform .18s ease; }
+body.chrome-hidden #topbar { opacity: 0; transform: translateY(-10px); pointer-events: none; }
+body.chrome-hidden #island { opacity: 0; transform: translate(-50%, 10px); pointer-events: none; }
 #show-chrome { position: absolute; bottom: 14px; right: 14px; z-index: 7; border-radius: 999px; opacity: .7; }
 
 #toast { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; padding: 8px 16px; border-radius: 999px; z-index: 20; opacity: .92; max-width: 90vw; }
@@ -84,3 +88,35 @@ body.chrome-hidden #topbar, body.chrome-hidden #island { display: none; }
 #modal-input { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field); color: var(--ink); margin: 4px 0 8px; font: inherit; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 #modal-ok.danger { background: #c42b2b; border-color: #c42b2b; color: #fff; }
+
+/* style popover (colors + pen styles) */
+#style-btn { padding: 6px; }
+#style-dot { width: 18px; height: 18px; border-radius: 50%; background: #101418; border: 2px solid rgba(128,128,128,.5); display: block; }
+#stylepop { position: absolute; bottom: 62px; left: 50%; transform: translateX(-50%); background: var(--overlay); border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); z-index: 8; width: 248px; backdrop-filter: blur(8px); }
+#stylepop[hidden] { display: none; }
+.pop-label { font-size: 12px; color: var(--ink-soft); margin: 4px 0 6px; }
+.pop-label:first-child { margin-top: 0; }
+.pop-colors { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.pop-colors .swatch { width: 26px; height: 26px; }
+.pop-custom { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--ink-soft); }
+.pop-custom input { width: 34px; height: 26px; border: 1px solid var(--field-border); border-radius: 6px; background: none; padding: 1px; cursor: pointer; }
+.pop-styles { display: flex; gap: 8px; }
+.pop-styles button { flex: 1; padding: 8px 4px; }
+.pop-styles button.active { border-color: var(--accent); outline: 2px solid var(--accent); }
+.pop-styles svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* drop highlight */
+#pages.dropping canvas, #nb-grid.dropping { outline: 3px dashed var(--accent); outline-offset: -3px; border-radius: 8px; }
+
+/* view + element entrances */
+@keyframes viewIn { from { opacity: 0; transform: translateY(8px); } }
+.view-enter { animation: viewIn .18s ease; }
+@keyframes sheetIn { from { opacity: 0; transform: translateY(14px) scale(.995); } }
+.sheet-enter { animation: sheetIn .22s ease; }
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } }
+#toast:not([hidden]) { animation: toastIn .16s ease; }
+@keyframes modalIn { from { opacity: 0; transform: scale(.96); } }
+#modal { animation: modalIn .14s ease; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
