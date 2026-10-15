@@ -10,23 +10,42 @@ not a copy of any Microsoft software.
 > (e.g. notebooks contain ordered pages; journal files are SQLite-based),
 > then write our own code. Name, icons, and artwork are ours.
 
-## Status: v0.1 MVP
+## Status: v0.5
 
-- Notebooks with pages, pressure-sensitive pen, highlighter, eraser
-- Colors, stroke width, undo, page add/delete, title search
+- Notebooks with pages, pressure-sensitive pen, pencil, highlighter, eraser
+- Scribble-to-delete gesture, Chaikin stroke smoothing, ruled paper
+- Home shelf, continuous page scroll (new pages on scroll-down), page dock
+- Zoom, hideable UI, light/dark themes, redo, image insert/move/delete
 - Local JSON library (no account, no cloud), `.openjournal` export/import
-- Read-only `.ink` import: open Microsoft Journal files, pages appear with
-  your ink (stroke editing of imports is on the roadmap)
-- Image insertion with move/delete, ruled paper, zoom, hideable UI
-- Runs on Windows and Linux via Electron
+- Read-only `.ink` import (pages with snapshots show your ink)
+- Images with move/delete, pen-locked input, pen event log for diagnostics
 
-## Run
+## Run (Electron dev shell)
 
 ```sh
 npm install
-npm test    # model + store round-trip checks (no GUI needed)
+npm test    # model + store + gesture round-trip checks (no GUI needed)
 npm start   # launch the app
 ```
+
+## Native build (Tauri v2, Rust backend)
+
+Prerequisites on Windows: Rust stable + Visual Studio Build Tools with the
+"Desktop development with C++" workload (for the MSVC linker) + WebView2
+(preinstalled on Windows 10/11). Open a *Developer* shell (or run from an
+environment with the MSVC `link.exe` first on `PATH`; note a Git-for-Windows
+`link.exe` shim must not shadow it):
+
+```sh
+npm run tauri dev    # debug build + hot window
+npm run tauri build  # release installer under src-tauri/target/release/bundle
+cargo test --manifest-path src-tauri/Cargo.toml  # Rust backend unit tests
+```
+
+The Rust backend stores the same `openjournal-library.json` format as the
+Electron shell, so notes carry over. Linux packages (AppImage/deb) are built
+from CI (see `.github/workflows`, planned) since they cannot be produced
+from a Windows host.
 
 ## What we learned from recon (facts only)
 
