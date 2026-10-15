@@ -413,10 +413,13 @@
     const nb = notebook(); if (!nb) return;
     deletePage(mostVisiblePage());
   };
+  const ICON_MOON = '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></svg>';
+  const ICON_SUN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>';
+  const ICON_X = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   function applyTheme(t) {
     document.body.dataset.theme = t;
     try { localStorage.setItem('oj-theme', t); } catch (_) {}
-    $('theme-btn').textContent = t === 'light' ? '☾' : '☀';
+    $('theme-btn').innerHTML = t === 'light' ? ICON_MOON : ICON_SUN;
   }
   $('theme-btn').onclick = () => applyTheme(document.body.dataset.theme === 'light' ? 'dark' : 'light');
   $('penlog-btn').onclick = async () => {
@@ -480,7 +483,7 @@
       const s = document.createElement('small');
       s.textContent = `${nb.pages.length} page${nb.pages.length === 1 ? '' : 's'}`;
       const del = document.createElement('button');
-      del.className = 'del'; del.textContent = '×'; del.title = 'Delete notebook';
+      del.className = 'del'; del.innerHTML = ICON_X; del.title = 'Delete notebook'; del.setAttribute('aria-label', 'Delete notebook');
       del.onclick = async (e) => {
         e.stopPropagation();
         if (await modalConfirm(`Delete "${nb.name}"?`, 'The notebook and all its pages will be removed.', 'Delete')) {
@@ -706,7 +709,7 @@
 
   /* ================= boot ================= */
   (async () => {
-    $('ver').textContent = 'v0.5';
+    $('ver').textContent = 'v0.6';
     let theme = 'light';
     try { theme = localStorage.getItem('oj-theme') || 'light'; } catch (_) {}
     applyTheme(theme);

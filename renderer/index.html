@@ -26,43 +26,43 @@
   <!-- ============ EDITOR ============ -->
   <section id="editor-view" hidden>
     <div id="topbar">
-      <button id="back-btn" title="Back to notebooks">←</button>
+      <button id="back-btn" title="Back to notebooks" aria-label="Back to notebooks"><svg viewBox="0 0 24 24"><path d="M19 12H5m6-7l-7 7 7 7"/></svg></button>
       <strong id="nb-name"></strong>
       <div class="spacer"></div>
       <div id="pagedock" role="group" aria-label="Pages">
-        <button id="pg-prev" title="Previous page">‹</button>
+        <button id="pg-prev" title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></svg></button>
         <span id="page-indicator"></span>
-        <button id="pg-next" title="Next page">›</button>
-        <button id="pg-add" title="Add page">+</button>
-        <button id="pg-del" title="Delete current page">×</button>
+        <button id="pg-next" title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></svg></button>
+        <button id="pg-add" title="Add page" aria-label="Add page"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button id="pg-del" title="Delete current page" aria-label="Delete current page"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
-      <button id="zoom-out" title="Zoom out (Ctrl+−)">−</button>
+      <button id="zoom-out" title="Zoom out (Ctrl+−)" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
       <button id="zoom-label" title="Reset zoom">100%</button>
-      <button id="zoom-in" title="Zoom in (Ctrl++)">+</button>
-      <button id="zoom-fit" title="Fit width">Fit</button>
-      <button id="lines-btn" class="toggle active" title="Ruled lines">Lines</button>
-      <button id="theme-btn" title="Toggle light/dark">☾</button>
-      <button id="penlog-btn" title="Copy pen event log for diagnostics">Pen log</button>
-      <button id="hide-btn" title="Hide interface (H)">Hide UI</button>
+      <button id="zoom-in" title="Zoom in (Ctrl++)" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button id="zoom-fit" title="Fit width" aria-label="Fit width"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button id="lines-btn" class="toggle active" title="Ruled lines" aria-label="Ruled lines"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h10"/></svg></button>
+      <button id="theme-btn" title="Toggle light/dark" aria-label="Toggle light/dark"></button>
+      <button id="penlog-btn" title="Copy pen event log for diagnostics" aria-label="Copy pen event log"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg></button>
+      <button id="hide-btn" title="Hide interface (H)" aria-label="Hide interface"><svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6c2 0 3.7.7 5.1 1.7M21 12s-3.5 6-9 6c-2 0-3.7-.7-5.1-1.7"/><path d="M4 4l16 16"/></svg></button>
     </div>
     <div id="pages"></div>
     <div id="island" role="toolbar" aria-label="Ink tools">
-      <button data-tool="pen" class="tool active">Pen</button>
-      <button data-tool="pencil" class="tool" title="Pencil">Pencil</button>
-      <button data-tool="highlighter" class="tool">Highlighter</button>
-      <button data-tool="eraser" class="tool">Eraser</button>
-      <button data-tool="select" class="tool" title="Select and move images">Select</button>
+      <button data-tool="pen" class="tool active" title="Pen" aria-label="Pen"><svg viewBox="0 0 24 24"><path d="M5 19l1.5-4.5L16 5l3 3L9.5 17.5 5 19z"/><path d="M14.5 6.5l3 3"/></svg></button>
+      <button data-tool="pencil" class="tool" title="Pencil" aria-label="Pencil"><svg viewBox="0 0 24 24"><path d="M4 20l1-4L16.5 4.5a2.12 2.12 0 013 3L8 19l-4 1z"/><path d="M14.5 6.5l3 3M4 20l3.5-.8"/></svg></button>
+      <button data-tool="highlighter" class="tool" title="Highlighter" aria-label="Highlighter"><svg viewBox="0 0 24 24"><path d="M5 15l7.5-7.5 4 4L9 19H5v-4z"/><path d="M13.5 4.5l3-1 4 4-1 3"/></svg></button>
+      <button data-tool="eraser" class="tool" title="Eraser" aria-label="Eraser"><svg viewBox="0 0 24 24"><path d="M7 19l-4-4L13 5l6 6-8 8H7z"/><path d="M4 21h16"/></svg></button>
+      <button data-tool="select" class="tool" title="Select and move images" aria-label="Select"><svg viewBox="0 0 24 24"><path d="M6 3l14 7-6 2-3 6-5-15z"/></svg></button>
       <span class="sep"></span>
-      <button id="image-btn" title="Insert image on current page">Image</button>
+      <button id="image-btn" title="Insert image on current page" aria-label="Insert image"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 4 3 3-2 4 3"/></svg></button>
       <span class="sep"></span>
       <div class="colors" id="colors"></div>
       <input id="width" type="range" min="1" max="24" value="3" title="Stroke width">
       <span class="sep"></span>
-      <button id="undo-btn" title="Undo last stroke (Ctrl+Z)">Undo</button>
-      <button id="redo-btn" title="Redo (Ctrl+Y)">Redo</button>
-      <button id="clear-btn" title="Clear current page">Clear</button>
+      <button id="undo-btn" title="Undo last stroke (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M8 5L3 10l5 5"/><path d="M3 10h11a6 6 0 016 6v1"/></svg></button>
+      <button id="redo-btn" title="Redo (Ctrl+Y)" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="M16 5l5 5-5 5"/><path d="M21 10H10a6 6 0 00-6 6v1"/></svg></button>
+      <button id="clear-btn" title="Clear current page" aria-label="Clear page"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2m-8 0l1 13h8l1-13"/></svg></button>
     </div>
-    <button id="show-chrome" hidden title="Show interface (H)">⋯</button>
+    <button id="show-chrome" hidden title="Show interface (H)" aria-label="Show interface"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
   </section>
 
   <div id="toast" hidden></div>

@@ -1,3 +1,6 @@
+// Hide the console window on Windows release builds (keep it for debug).
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 // OpenJournal native backend (Tauri v2).
 // Library format mirrors lib/model.js so Electron and Tauri share files:
 //   { "version": 1, "notebooks": [ {id,name,color,icon,ruled,updatedAt,

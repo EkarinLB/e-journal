@@ -59,6 +59,10 @@ button.toggle.active { opacity: 1; border-color: var(--accent); color: var(--ink
 /* floating tool island */
 #island { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; background: var(--overlay); border: 1px solid var(--panel-border); border-radius: 12px; padding: 8px 12px; box-shadow: var(--shadow); z-index: 6; max-width: 96vw; flex-wrap: wrap; justify-content: center; backdrop-filter: blur(8px); }
 #island .sep { width: 1px; align-self: stretch; background: var(--panel-border); margin: 0 2px; }
+#topbar svg, #island svg, #show-chrome svg, .card .del svg { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#topbar button, #island button { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; }
+.card .del { display: inline-flex; align-items: center; justify-content: center; }
+.card .del svg { width: 14px; height: 14px; }
 button.tool.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .colors { display: flex; gap: 6px; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(128,128,128,.4); cursor: pointer; padding: 0; }
