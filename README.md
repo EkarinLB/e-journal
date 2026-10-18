@@ -23,6 +23,21 @@ Local-first ink notebook for Windows and Linux. Clean-room original code.
 > (e.g. notebooks contain ordered pages; journal files are SQLite-based),
 > then write our own code. Name, icons, and artwork are ours.
 
+## Downloads
+
+Latest: **[v0.11.0 (beta)](https://github.com/EkarinLB/e-journal/releases/tag/v0.11.0)**
+
+| Platform | File | Size |
+|---|---|---|
+| Windows 64-bit | [`E-Journal_0.11.0_x64-setup.exe`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/E-Journal_0.11.0_x64-setup.exe) | 2.5 MB |
+| Windows (MSI/enterprise) | [`E-Journal_0.11.0_x64_en-US.msi`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/E-Journal_0.11.0_x64_en-US.msi) | 3.5 MB |
+| Debian/Ubuntu | [`E-Journal_0.11.0_amd64.deb`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/E-Journal_0.11.0_amd64.deb) | 3.6 MB |
+| Linux portable | [`E-Journal_0.11.0_amd64.AppImage`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/E-Journal_0.11.0_amd64.AppImage) | 78 MB |
+
+SHA-256 sums for every artifact are in
+[`checksums.txt`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/checksums.txt).
+All packages are produced by CI from the tagged source.
+
 ## Requirements
 
 ### Windows
