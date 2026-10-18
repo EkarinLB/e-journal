@@ -14,8 +14,9 @@ app-id: com.ejournal.app
 runtime: org.freedesktop.Platform
 runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
-base: org.freedesktop.Platform
-base-version: '24.08'
+# No `base:`/`base-version:` here. Declaring a base named after the runtime
+# makes flatpak-builder search for an *app* ref (app/org.freedesktop.Platform),
+# which does not exist, and the build fails with "not installed".
 command: e-journal
 
 finish-args:

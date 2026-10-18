@@ -84,6 +84,9 @@ jobs:
           sudo flatpak --system install -y org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08 \
             org.freedesktop.Sdk.Extension.rust-stable//24.08
+          # Print what is actually installed: if the build reports a runtime
+          # "not installed", this shows whether it really is missing.
+          flatpak --system list --runtime
 
       - name: Build flatpak
         run: |
@@ -91,7 +94,10 @@ jobs:
           #   flatpak-builder [options] DIRECTORY MANIFEST
           # No --disable-download: the manifest pulls sources from git.
           flatpak-builder --force-clean -y --repo=repo \
-            flatpak-build flatpak/com.ejournal.app.yml
+            flatpak-build flatpak/com.ejournal.app.yml \
+            2>&1 | tee build.log
+          # flatpak-builder's exit status is masked by the pipe above.
+          test ${PIPESTATUS[0]} -eq 0 || { tail -40 build.log; exit 1; }
           # flatpak-builder exports to the repo's default branch (master),
           # so bundle from master rather than inventing a branch name.
           flatpak build-bundle repo e-journal.flatpak com.ejournal.app master
