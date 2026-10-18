@@ -12,11 +12,72 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 const MAX_IMAGE_BYTES: u64 = 12 * 1024 * 1024;
+const LIBRARY_FILE: &str = "openjournal-library.json";
+
+/// Canonical, product-named data folder: %APPDATA%\OpenJournal
+/// (stable across packaging changes; the Tauri `app_data_dir()` is keyed to
+/// the bundle identifier and changes if the identifier ever changes).
+fn canonical_dir() -> Result<std::path::PathBuf, String> {
+    let base = std::env::var_os("APPDATA")
+        .map(std::path::PathBuf::from)
+        .ok_or("APPDATA not set")?;
+    let dir = base.join("OpenJournal");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// Older locations that may hold a real library, newest convention last:
+///   - %APPDATA%\com.openjournal.app  (previous native builds)
+///   - %APPDATA%\openjournal         (Electron dev/legacy shell)
+fn legacy_paths(app: &AppHandle) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(d) = app.path().app_data_dir() {
+        out.push(d.join(LIBRARY_FILE));
+    }
+    if let Some(base) = std::env::var_os("APPDATA") {
+        let base = std::path::PathBuf::from(base);
+        out.push(base.join("openjournal").join(LIBRARY_FILE));
+    }
+    out
+}
 
 fn library_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join("openjournal-library.json"))
+    Ok(canonical_dir()?.join(LIBRARY_FILE))
+}
+
+fn notebook_count(path: &std::path::Path) -> usize {
+    let text = match fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(_) => return 0,
+    };
+    serde_json::from_str::<Value>(&text)
+        .ok()
+        .and_then(|v| v.get("notebooks").and_then(|n| n.as_array()).map(|a| a.len()))
+        .unwrap_or(0)
+}
+
+/// Adopt the first legacy library that actually contains notebooks, so
+/// upgrading never silently presents an empty app.
+fn migrate_legacy(app: &AppHandle, canonical: &std::path::Path) -> Result<Option<String>, String> {
+    if notebook_count(canonical) > 0 {
+        return Ok(None);
+    }
+    for legacy in legacy_paths(app) {
+        if legacy == canonical || !legacy.exists() {
+            continue;
+        }
+        let count = notebook_count(&legacy);
+        if count == 0 {
+            continue;
+        }
+        let text = fs::read_to_string(&legacy).map_err(|e| e.to_string())?;
+        fs::write(canonical, &text).map_err(|e| e.to_string())?;
+        return Ok(Some(format!(
+            "Migrated {count} notebooks from {}",
+            legacy.display()
+        )));
+    }
+    Ok(None)
 }
 
 fn is_finite_number(v: &Value) -> bool {
@@ -87,6 +148,9 @@ fn normalize(library: Value) -> Result<Value, String> {
 #[tauri::command]
 fn library_load(app: AppHandle) -> Result<Value, String> {
     let path = library_path(&app)?;
+    if let Some(msg) = migrate_legacy(&app, &path)? {
+        eprintln!("{msg}");
+    }
     if !path.exists() {
         return Ok(serde_json::json!({ "notebooks": [] }));
     }
@@ -253,5 +317,22 @@ mod tests {
     #[test]
     fn defaults_missing_notebooks() {
         assert_eq!(normalize(json!({})).unwrap()["notebooks"], json!([]));
+    }
+
+    #[test]
+    fn counts_notebooks_in_a_library_file() {
+        let dir = std::env::temp_dir().join(format!("oj-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let good = dir.join("good.json");
+        let empty = dir.join("empty.json");
+        let junk = dir.join("junk.json");
+        fs::write(&good, serde_json::to_string(&good_lib()).unwrap()).unwrap();
+        fs::write(&empty, "{}").unwrap();
+        fs::write(&junk, "not json").unwrap();
+        assert_eq!(notebook_count(&good), 1);
+        assert_eq!(notebook_count(&empty), 0);
+        assert_eq!(notebook_count(&junk), 0);
+        assert_eq!(notebook_count(&dir.join("missing.json")), 0);
+        let _ = fs::remove_dir_all(&dir);
     }
 }
