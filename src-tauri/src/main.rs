@@ -284,6 +284,15 @@ fn util_sqlwasm() -> Vec<u8> {
 
 fn main() {
     tauri::Builder::default()
+        // A second instance would hold a stale in-memory library and could
+        // overwrite newer saves (including deletions) on quit.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+                let _ = w.show();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             library_load,

@@ -93,13 +93,21 @@
 
   /* ================= persistence ================= */
   let saveTimer = null;
+  function writeLibrary() {
+    const nb = notebook();
+    if (nb) nb.updatedAt = new Date().toISOString();
+    return Backend.saveLibrary(state.library).catch((e) => { toast('Save failed: ' + e.message); throw e; });
+  }
   function scheduleSave() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      const nb = notebook();
-      if (nb) nb.updatedAt = new Date().toISOString();
-      Backend.saveLibrary(state.library).catch((e) => toast('Save failed: ' + e.message));
-    }, 400);
+    saveTimer = setTimeout(() => { saveTimer = null; writeLibrary(); }, 400);
+  }
+  // Destructive changes must not sit in a debounce timer: if the window is
+  // closed before it fires, the deletion is lost and the old data returns.
+  async function saveNow() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    await writeLibrary();
   }
 
   function toast(msg) {
@@ -483,7 +491,7 @@
     nb.pages.forEach((p, i) => { p.order = i; });
     state.undoStack = state.undoStack.filter((u) => u.pageId !== pageId);
     state.redoStack = state.redoStack.filter((r) => r.pageId !== pageId);
-    scheduleSave(); buildEditor();
+    await saveNow(); buildEditor();
   }
 
   function openNotebook(id) {
@@ -525,7 +533,7 @@
         e.stopPropagation();
         if (await modalConfirm(`Delete "${nb.name}"?`, 'The notebook and all its pages will be removed.', 'Delete')) {
           state.library.notebooks = state.library.notebooks.filter((n) => n.id !== nb.id);
-          scheduleSave(); renderHome($('search').value);
+          await saveNow(); renderHome($('search').value);
         }
       };
       card.append(h, s, del);
@@ -620,7 +628,7 @@
     const nb = notebook(); if (!nb) return;
     const id = mostVisiblePage();
     const pg = nb.pages.find((p) => p.id === id);
-    if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; state.undoStack = state.undoStack.filter((u) => u.pageId !== pg.id); state.redoStack = []; scheduleSave(); redrawPage(pg.id); }
+    if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; state.undoStack = state.undoStack.filter((u) => u.pageId !== pg.id); state.redoStack = []; await saveNow(); redrawPage(pg.id); }
   };
   function insertImageDataUrl(dataUrl, name, x, y) {
     const nb = notebook(); if (!nb) return;
