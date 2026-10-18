@@ -36,6 +36,26 @@ build-options:
     LIBSQLITE3_FLAGS: -DSQLITE_ENABLE_FTS5
 
 modules:
+  # The Freedesktop SDK ships no Node.js, and never will — a Tauri app with a
+  # web frontend needs one at build time. Node is built here as its own module
+  # against the SDK (the standard Flatpak pattern) so the app module can use it.
+  - name: node
+    buildsystem: simple
+    build-commands:
+      - ./configure --prefix=/app --libdir=/app/lib
+      - make -j$(( $(nproc) > 4 ? 4 : $(nproc) ))
+      - make install
+    sources:
+      - type: archive
+        url: https://nodejs.org/dist/v22.11.0/node-v22.11.0.tar.xz
+        sha256: bbf0297761d53aefda9d7855c57c7d2c272b83a7b5bad4fea9cb29006d8e1d35
+        strip-components: 1
+    cleanup:
+      - /app/include
+      - /app/share/doc
+      - /app/share/man
+      - /app/share/man/man1/node.1.gz
+
   - name: e-journal
     buildsystem: simple
     build-commands:
