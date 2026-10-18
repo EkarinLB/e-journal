@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.openjournal.app</id>
+  <id>com.github.EkarinLB.openjournal</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
@@ -28,7 +28,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">com.openjournal.app.desktop</launchable>
+  <launchable type="desktop-id">com.github.EkarinLB.openjournal.desktop</launchable>
 
   <categories>
     <category>Office</category>
@@ -62,6 +62,6 @@
     <name>The OpenJournal contributors</name>
   </developer>
 
-  <url type="homepage">https://github.com/OWNER/openjournal</url>
-  <url type="bugtracker">https://github.com/OWNER/openjournal/issues</url>
+  <url type="homepage">https://github.com/EkarinLB/openjournal</url>
+  <url type="bugtracker">https://github.com/EkarinLB/openjournal/issues</url>
 </component>
