@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=OpenJournal
+Name=E-Journal
 GenericName=Ink Notebook
 Comment=Local-first ink notebook for handwriting and note taking
-Exec=openjournal %F
-Icon=com.openjournal.app
+Exec=E-Journal %F
+Icon=com.ejournal.app
 Terminal=false
 Categories=Office;Utility;
 Keywords=notes;notebook;ink;handwriting;pen;journal;whiteboard;
-StartupWMClass=OpenJournal
+StartupWMClass=E-Journal
 StartupNotify=true
-MimeType=application/x-openjournal;
+MimeType=application/x-E-Journal;

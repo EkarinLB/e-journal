@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Rewrite packaging IDs from com.openjournal.app to the GitHub reverse-DNS
-# form Flathub expects: com.github.<owner>.openjournal
+# Rewrite packaging IDs from com.ejournal.app to the GitHub reverse-DNS
+# form Flathub expects: com.github.<owner>.E-Journal
 #
 # Run:  bash scripts/finalize-flatpak.sh <github-owner>
 set -euo pipefail
 
 OWNER="${1:?usage: finalize-flatpak.sh <github-owner>}"
-NEW_ID="com.github.${OWNER}.openjournal"
-OLD_ID="com.openjournal.app"
+NEW_ID="com.github.${OWNER}.E-Journal"
+OLD_ID="com.ejournal.app"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 FILES=(
-  flatpak/com.openjournal.app.yml
-  data/metainfo/com.openjournal.app.metainfo.xml
-  data/com.openjournal.app.desktop
+  flatpak/com.ejournal.app.yml
+  data/metainfo/com.ejournal.app.metainfo.xml
+  data/com.ejournal.app.desktop
 )
 
 echo "Rewriting ${OLD_ID} -> ${NEW_ID} in ${#FILES[@]} files"
@@ -23,20 +23,20 @@ for f in "${FILES[@]}"; do
   sed -i.bak "s/${OLD_ID}/${NEW_ID}/g" "$f" && rm -f "$f.bak"
 done
 
-mv flatpak/com.openjournal.app.yml "flatpak/${NEW_ID}.yml"
-mv data/metainfo/com.openjournal.app.metainfo.xml "data/metainfo/${NEW_ID}.metainfo.xml"
-mv data/com.openjournal.app.desktop "data/${NEW_ID}.desktop"
-git mv data/icons/128x128/com.openjournal.app.png "data/icons/128x128/${NEW_ID}.png" 2>/dev/null || \
-  mv data/icons/128x128/com.openjournal.app.png "data/icons/128x128/${NEW_ID}.png"
-git mv data/icons/256x256/com.openjournal.app.png "data/icons/256x256/${NEW_ID}.png" 2>/dev/null || \
-  mv data/icons/256x256/com.openjournal.app.png "data/icons/256x256/${NEW_ID}.png"
+mv flatpak/com.ejournal.app.yml "flatpak/${NEW_ID}.yml"
+mv data/metainfo/com.ejournal.app.metainfo.xml "data/metainfo/${NEW_ID}.metainfo.xml"
+mv data/com.ejournal.app.desktop "data/${NEW_ID}.desktop"
+git mv data/icons/128x128/com.ejournal.app.png "data/icons/128x128/${NEW_ID}.png" 2>/dev/null || \
+  mv data/icons/128x128/com.ejournal.app.png "data/icons/128x128/${NEW_ID}.png"
+git mv data/icons/256x256/com.ejournal.app.png "data/icons/256x256/${NEW_ID}.png" 2>/dev/null || \
+  mv data/icons/256x256/com.ejournal.app.png "data/icons/256x256/${NEW_ID}.png"
 
 # URLs in metainfo
-sed -i.bak "s#https://github.com/OWNER/openjournal#https://github.com/${OWNER}/openjournal#g" \
+sed -i.bak "s#https://github.com/OWNER/E-Journal#https://github.com/${OWNER}/E-Journal#g" \
   "data/metainfo/${NEW_ID}.metainfo.xml" && rm -f "data/metainfo/${NEW_ID}.metainfo.xml.bak"
 
 # Tauri bundle identifiers (rebuild required after this)
-sed -i.bak "s/com.openjournal.app/${NEW_ID}/g" src-tauri/tauri.conf.json && rm -f src-tauri/tauri.conf.json.bak
+sed -i.bak "s/com.ejournal.app/${NEW_ID}/g" src-tauri/tauri.conf.json && rm -f src-tauri/tauri.conf.json.bak
 
 echo "Done. App ID is now ${NEW_ID}"
 echo "Next: rebuild so the bundled Linux desktop/icon files carry the new ID:"

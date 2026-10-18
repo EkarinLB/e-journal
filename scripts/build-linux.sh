@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build Linux binaries (.deb + AppImage) from inside WSL/Ubuntu.
-# Run:  wsl -d Ubuntu -- bash "/mnt/c/Users/Adam/Documents/Default Project/openjournal/scripts/build-linux.sh"
+# Run:  wsl -d Ubuntu -- bash "/mnt/c/Users/Adam/Documents/Default Project/E-Journal/scripts/build-linux.sh"
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

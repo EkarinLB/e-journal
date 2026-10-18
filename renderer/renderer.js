@@ -1,5 +1,5 @@
 'use strict';
-/* OpenJournal renderer v0.2 — home + editor, gestures, smoothing, zoom.
+/* E-Journal renderer v0.2 — home + editor, gestures, smoothing, zoom.
    All code here is original. */
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -693,7 +693,7 @@
         if (/\.ink$/i.test(f.name)) {
           const buf = await f.arrayBuffer();
           await importPickedInk(new Uint8Array(buf), f.name);
-        } else if (/\.openjournal$/i.test(f.name)) {
+        } else if (/\.E-Journal$/i.test(f.name)) {
           const text = await f.text();
           const data = JSON.parse(text);
           if (!Array.isArray(data.notebooks)) throw new Error('bad file');

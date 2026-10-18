@@ -1,7 +1,7 @@
 // Hide the console window on Windows release builds (keep it for debug).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-// OpenJournal native backend (Tauri v2).
+// E-Journal native backend (Tauri v2).
 // Library format mirrors lib/model.js so Electron and Tauri share files:
 //   { "version": 1, "notebooks": [ {id,name,color,icon,ruled,updatedAt,
 //     pages: [{id,order,width,height,strokes,images,background}]} ] }
@@ -12,31 +12,35 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 const MAX_IMAGE_BYTES: u64 = 12 * 1024 * 1024;
-const LIBRARY_FILE: &str = "openjournal-library.json";
+const LIBRARY_FILE: &str = "e-journal-library.json";
 
-/// Canonical, product-named data folder: %APPDATA%\OpenJournal
-/// (stable across packaging changes; the Tauri `app_data_dir()` is keyed to
-/// the bundle identifier and changes if the identifier ever changes).
+/// Canonical, product-named data folder: %APPDATA%\E-Journal
+/// (independent of the bundle identifier, so branding and packaging changes
+/// never orphan a library).
 fn canonical_dir() -> Result<std::path::PathBuf, String> {
     let base = std::env::var_os("APPDATA")
         .map(std::path::PathBuf::from)
         .ok_or("APPDATA not set")?;
-    let dir = base.join("OpenJournal");
+    let dir = base.join("E-Journal");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
 
 /// Older locations that may hold a real library, newest convention last:
-///   - %APPDATA%\com.openjournal.app  (previous native builds)
-///   - %APPDATA%\openjournal         (Electron dev/legacy shell)
+///   - %APPDATA%\com.ejournal.app   (early native builds, identifier-keyed)
+///   - %APPDATA%\E-Journal           (pre-rename canonical folder)
+///   - %APPDATA%\E-Journal           (Electron shell)
 fn legacy_paths(app: &AppHandle) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
     if let Ok(d) = app.path().app_data_dir() {
+        out.push(d.join("E-Journal-library.json"));
         out.push(d.join(LIBRARY_FILE));
     }
     if let Some(base) = std::env::var_os("APPDATA") {
         let base = std::path::PathBuf::from(base);
-        out.push(base.join("openjournal").join(LIBRARY_FILE));
+        out.push(base.join("E-Journal").join("E-Journal-library.json"));
+        out.push(base.join("E-Journal").join("E-Journal-library.json"));
+        out.push(base.join("E-Journal").join(LIBRARY_FILE));
     }
     out
 }
@@ -178,8 +182,8 @@ fn library_export(app: AppHandle, library: Value) -> Result<bool, String> {
     let picked = app
         .dialog()
         .file()
-        .add_filter("OpenJournal", &["openjournal"])
-        .set_file_name("notebook.openjournal")
+        .add_filter("E-Journal", &["E-Journal"])
+        .set_file_name("notebook.E-Journal")
         .blocking_save_file();
     let Some(file_path) = picked else {
         return Ok(false);
@@ -197,7 +201,7 @@ fn library_import(app: AppHandle) -> Result<Option<String>, String> {
     let picked = app
         .dialog()
         .file()
-        .add_filter("OpenJournal", &["openjournal"])
+        .add_filter("E-Journal", &["E-Journal"])
         .blocking_pick_file();
     let Some(file_path) = picked else {
         return Ok(None);

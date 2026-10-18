@@ -16,7 +16,7 @@ let store;
 let win;
 
 function libraryPath() {
-  return path.join(app.getPath('userData'), 'openjournal-library.json');
+  return path.join(app.getPath('userData'), 'e-journal-library.json');
 }
 
 function createWindow() {
@@ -45,8 +45,8 @@ ipcMain.handle('library:save', (_evt, library) => { store.save(library); return 
 
 ipcMain.handle('library:export', async (_evt, library) => {
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    defaultPath: 'notebook.openjournal',
-    filters: [{ name: 'OpenJournal', extensions: ['openjournal'] }],
+    defaultPath: 'notebook.ejournal',
+    filters: [{ name: 'E-Journal', extensions: ['ejournal'] }],
   });
   if (canceled || !filePath) return false;
   fs.writeFileSync(filePath, JSON.stringify({ version: 1, notebooks: library.notebooks }));
@@ -55,7 +55,7 @@ ipcMain.handle('library:export', async (_evt, library) => {
 
 ipcMain.handle('library:import', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    filters: [{ name: 'OpenJournal', extensions: ['openjournal'] }],
+    filters: [{ name: 'E-Journal', extensions: ['ejournal'] }],
     properties: ['openFile'],
   });
   if (canceled || filePaths.length === 0) return null;

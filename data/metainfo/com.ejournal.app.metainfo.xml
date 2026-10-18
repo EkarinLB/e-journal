@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.openjournal.app</id>
+  <id>com.ejournal.app</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
-  <name>OpenJournal</name>
+  <name>E-Journal</name>
   <summary>Local-first ink notebook for pen and paper replacement</summary>
 
   <description>
     <p>
-      OpenJournal is a local-first notebook for handwriting, drawing and note
+      E-Journal is a local-first notebook for handwriting, drawing and note
       taking. Your notes live in ordinary files on your own machine — no
       account, no cloud, no telemetry — so the same notebook opens on Windows
       and Linux.
@@ -24,11 +24,11 @@
       <li>Zoom, hideable distraction-free interface, light and dark themes</li>
       <li>Undo and redo across strokes</li>
       <li>Read-only import of Microsoft Journal .ink files</li>
-      <li>Portable .openjournal export and import</li>
+      <li>Portable .E-Journal export and import</li>
     </ul>
   </description>
 
-  <launchable type="desktop-id">com.openjournal.app.desktop</launchable>
+  <launchable type="desktop-id">com.ejournal.app.desktop</launchable>
 
   <categories>
     <category>Office</category>
@@ -58,10 +58,10 @@
 
   <content_rating type="oars-1.1"/>
 
-  <developer id="com.openjournal">
-    <name>The OpenJournal contributors</name>
+  <developer id="com.E-Journal">
+    <name>The E-Journal contributors</name>
   </developer>
 
-  <url type="homepage">https://github.com/EkarinLB/openjournal</url>
-  <url type="bugtracker">https://github.com/EkarinLB/openjournal/issues</url>
+  <url type="homepage">https://github.com/EkarinLB/E-Journal</url>
+  <url type="bugtracker">https://github.com/EkarinLB/E-Journal/issues</url>
 </component>

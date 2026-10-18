@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OpenJournal",
+  "productName": "E-Journal",
   "version": "0.11.0",
-  "identifier": "com.openjournal.app",
+  "identifier": "com.ejournal.app",
   "build": {
     "frontendDist": "../renderer",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "OpenJournal",
+        "title": "E-Journal",
         "width": 1440,
         "height": 900,
         "minWidth": 900,

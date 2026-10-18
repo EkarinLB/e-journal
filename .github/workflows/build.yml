@@ -86,7 +86,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v${{ github.run_number }}
-          releaseName: "OpenJournal ${{ github.ref_name }} (build ${{ github.run_number }})"
+          releaseName: "E-Journal ${{ github.ref_name }} (build ${{ github.run_number }})"
           releaseDraft: true
           prerelease: true
           args: --bundles ${{ matrix.bundles }}

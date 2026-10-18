@@ -1,4 +1,4 @@
-# OpenJournal
+# E-Journal
 
 Local-first ink notebook for Windows and Linux. A clean-room, original
 implementation inspired by the *behavior* of pen-and-paper journal apps —
@@ -30,9 +30,9 @@ Local-first ink notebook for Windows and Linux. Clean-room original code.
 - Scribble-to-delete gesture, Chaikin stroke smoothing, ruled paper
 - Home shelf, continuous page scroll (new pages on scroll-down), page dock
 - Zoom, hideable UI, light/dark themes, undo/redo, color picker
-- Local JSON library (no account, no cloud), `.openjournal` export/import
+- Local JSON library (no account, no cloud), `.E-Journal` export/import
 - Read-only `.ink` import, drag-and-drop for images/notebooks
-- Data at `%APPDATA%\OpenJournal\openjournal-library.json` (legacy
+- Data at `%APPDATA%\E-Journal\E-Journal-library.json` (legacy
   locations are auto-migrated on first run)
 
 ## Run (Electron dev shell)
@@ -57,7 +57,7 @@ npm run tauri build  # release installer under src-tauri/target/release/bundle
 cargo test --manifest-path src-tauri/Cargo.toml  # Rust backend unit tests
 ```
 
-The Rust backend stores the same `openjournal-library.json` format as the
+The Rust backend stores the same `E-Journal-library.json` format as the
 Electron shell, so notes carry over. Linux packages (AppImage/deb) are built
 from CI (see `.github/workflows`, planned) since they cannot be produced
 from a Windows host.

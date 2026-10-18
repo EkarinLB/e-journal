@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One-time Linux build environment for OpenJournal inside WSL2/Ubuntu.
-# Run:  wsl -d Ubuntu -- bash "/mnt/c/Users/Adam/Documents/Default Project/openjournal/scripts/setup-linux-build-env.sh"
+# One-time Linux build environment for E-Journal inside WSL2/Ubuntu.
+# Run:  wsl -d Ubuntu -- bash "/mnt/c/Users/Adam/Documents/Default Project/E-Journal/scripts/setup-linux-build-env.sh"
 set -euo pipefail
 
 echo "==> Installing Tauri v2 system dependencies"

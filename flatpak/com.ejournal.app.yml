@@ -1,6 +1,6 @@
-# Flatpak manifest for OpenJournal (Flathub submission).
+# Flatpak manifest for E-Journal (Flathub submission).
 #
-# App ID: com.openjournal.app — deliberately NOT tied to any individual
+# App ID: com.ejournal.app — deliberately NOT tied to any individual
 # maintainer's account, so the project can be handed to another developer
 # without the ID (and therefore the Flathub entry) needing to change.
 #
@@ -8,15 +8,15 @@
 # development moves, update this one line to the new canonical URL.
 #
 # Build locally (clones the tagged source):
-#   flatpak-builder --user --install --force-clean build flatpak/com.openjournal.app.yml
+#   flatpak-builder --user --install --force-clean build flatpak/com.ejournal.app.yml
 
-app-id: com.openjournal.app
+app-id: com.ejournal.app
 runtime: org.freedesktop.Platform
 runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 base: org.freedesktop.Platform
 base-version: '24.08'
-command: openjournal
+command: E-Journal
 
 finish-args:
   - --share=ipc
@@ -30,27 +30,27 @@ finish-args:
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
   env:
-    CARGO_HOME: /run/build/openjournal/cargo
+    CARGO_HOME: /run/build/E-Journal/cargo
     RUST_BACKTRACE: '1'
     # Tauri's webview needs these at build time on Linux
     LIBSQLITE3_FLAGS: -DSQLITE_ENABLE_FTS5
 
 modules:
-  - name: openjournal
+  - name: E-Journal
     buildsystem: simple
     build-commands:
       - npm install --no-audit --no-fund
       - npx tauri build --bundles deb
     sources:
       - type: git
-        url: https://github.com/EkarinLB/openjournal.git
+        url: https://github.com/EkarinLB/E-Journal.git
         tag: v0.11.0
     post-install:
-      - install -Dm644 data/com.openjournal.app.desktop
-        /app/share/applications/com.openjournal.app.desktop
-      - install -Dm644 data/metainfo/com.openjournal.app.metainfo.xml
-        /app/share/metainfo/com.openjournal.app.metainfo.xml
-      - install -Dm644 data/icons/128x128/com.openjournal.app.png
-        /app/share/icons/hicolor/128x128/apps/com.openjournal.app.png
-      - install -Dm644 data/icons/256x256/com.openjournal.app.png
-        /app/share/icons/hicolor/256x256/apps/com.openjournal.app.png
+      - install -Dm644 data/com.ejournal.app.desktop
+        /app/share/applications/com.ejournal.app.desktop
+      - install -Dm644 data/metainfo/com.ejournal.app.metainfo.xml
+        /app/share/metainfo/com.ejournal.app.metainfo.xml
+      - install -Dm644 data/icons/128x128/com.ejournal.app.png
+        /app/share/icons/hicolor/128x128/apps/com.ejournal.app.png
+      - install -Dm644 data/icons/256x256/com.ejournal.app.png
+        /app/share/icons/hicolor/256x256/apps/com.ejournal.app.png
