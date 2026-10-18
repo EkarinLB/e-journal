@@ -58,9 +58,23 @@
 
   <content_rating type="oars-1.1"/>
 
-  <developer id="com.E-Journal">
+  <developer id="ejournal">
     <name>The E-Journal contributors</name>
   </developer>
+
+  <releases>
+    <release version="0.11.0" date="2026-10-18">
+      <description>
+        <p>First public beta.</p>
+        <ul>
+          <li>Pressure-sensitive ink with ballpoint, fountain and brush nibs</li>
+          <li>Scribble-to-delete, highlighter, eraser and ruled pages</li>
+          <li>Continuous page scroll with automatic new pages</li>
+          <li>Read-only import of Microsoft Journal .ink files</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
 
   <url type="homepage">https://github.com/EkarinLB/e-journal</url>
   <url type="bugtracker">https://github.com/EkarinLB/e-journal/issues</url>
