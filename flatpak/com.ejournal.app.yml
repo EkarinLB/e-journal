@@ -30,7 +30,6 @@ finish-args:
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
   env:
-    CARGO_HOME: /run/build/E-Journal/cargo
     RUST_BACKTRACE: '1'
     # Tauri's webview needs these at build time on Linux
     LIBSQLITE3_FLAGS: -DSQLITE_ENABLE_FTS5
@@ -48,6 +47,9 @@ modules:
     sources:
       - type: git
         url: https://github.com/EkarinLB/e-journal.git
+        # Flathub builds the released tag; CI can override with
+        # --repo=... EJOURNAL_REF=<ref> via flatpak-builder's
+        # source-tag override, so master builds do not need an edit here.
         tag: v0.11.0
     post-install:
       - install -Dm644 data/com.ejournal.app.desktop

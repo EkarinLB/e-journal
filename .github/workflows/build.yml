@@ -85,14 +85,19 @@ jobs:
             org.freedesktop.Sdk.Extension.rust-stable//24.08
           # optional graphics extension; do not fail the build if unavailable
           flatpak --user install -y \
-            org.freedesktop.Platform.24.08//extra=//share/extensions/vulkan/ || true
+            org.freedesktop.Platform.GL//24.08 || true
 
       - name: Build flatpak
         run: |
+          # flatpak-builder takes a build DIRECTORY *and* the manifest:
+          #   flatpak-builder [options] DIRECTORY MANIFEST
           # No --disable-download: the manifest pulls sources from git.
           flatpak-builder --user --force-clean --repo=repo \
-            flatpak/com.ejournal.app.yml
-          flatpak build-bundle repo e-journal.flatpak com.ejournal.app stable
+            flatpak-build flatpak/com.ejournal.app.yml
+          # flatpak-builder exports to the repo's default branch (master),
+          # so bundle from master rather than inventing a branch name.
+          flatpak build-bundle repo e-journal.flatpak com.ejournal.app master
+          ls -la e-journal.flatpak
 
       - name: Upload flatpak
         uses: actions/upload-artifact@v4
