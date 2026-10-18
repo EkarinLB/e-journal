@@ -43,7 +43,7 @@ modules:
       - npx tauri build --bundles deb
     sources:
       - type: git
-        url: https://github.com/EkarinLB/E-Journal.git
+        url: https://github.com/EkarinLB/e-journal.git
         tag: v0.11.0
     post-install:
       - install -Dm644 data/com.ejournal.app.desktop

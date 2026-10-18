@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Tests (${{ matrix.os }})
@@ -51,6 +54,9 @@ jobs:
   build:
     name: Package (${{ matrix.os }})
     needs: test
+    permissions:
+      # required to create the draft release the artifacts are attached to
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -85,8 +91,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v${{ github.run_number }}
-          releaseName: "E-Journal ${{ github.ref_name }} (build ${{ github.run_number }})"
+          tagName: build-${{ matrix.os }}-${{ github.run_number }}
+          releaseName: "E-Journal 0.11.0 beta (build ${{ github.run_number }})"
           releaseDraft: true
           prerelease: true
           args: --bundles ${{ matrix.bundles }}
