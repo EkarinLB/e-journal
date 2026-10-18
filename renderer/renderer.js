@@ -16,7 +16,7 @@
       const invoke = (...args) => core.invoke(...args);
       return {
         loadLibrary: () => invoke('library_load'),
-        saveLibrary: (library) => invoke('library_save', { library }),
+        saveLibrary: (library, intentional) => invoke('library_save', { library, intentional: !!intentional }),
         exportLibrary: (library) => invoke('library_export', { library }),
         importLibrary: () => invoke('library_import'),
         pickImage: () => invoke('media_pick_image'),
@@ -93,21 +93,23 @@
 
   /* ================= persistence ================= */
   let saveTimer = null;
-  function writeLibrary() {
+  function writeLibrary(intentional) {
     const nb = notebook();
     if (nb) nb.updatedAt = new Date().toISOString();
-    return Backend.saveLibrary(state.library).catch((e) => { toast('Save failed: ' + e.message); throw e; });
+    return Backend.saveLibrary(state.library, intentional).catch((e) => { toast('Save failed: ' + e.message); throw e; });
   }
   function scheduleSave() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { saveTimer = null; writeLibrary(); }, 400);
+    saveTimer = setTimeout(() => { saveTimer = null; writeLibrary(false); }, 400);
   }
   // Destructive changes must not sit in a debounce timer: if the window is
   // closed before it fires, the deletion is lost and the old data returns.
-  async function saveNow() {
+  // `intentional` marks a save the user asked for directly (deleting the last
+  // notebook is legitimate, unlike an empty save produced by a bug).
+  async function saveNow(intentional = false) {
     clearTimeout(saveTimer);
     saveTimer = null;
-    await writeLibrary();
+    await writeLibrary(intentional);
   }
 
   function toast(msg) {
@@ -533,7 +535,7 @@
         e.stopPropagation();
         if (await modalConfirm(`Delete "${nb.name}"?`, 'The notebook and all its pages will be removed.', 'Delete')) {
           state.library.notebooks = state.library.notebooks.filter((n) => n.id !== nb.id);
-          await saveNow(); renderHome($('search').value);
+          await saveNow(true); renderHome($('search').value);
         }
       };
       card.append(h, s, del);

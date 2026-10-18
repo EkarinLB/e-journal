@@ -189,18 +189,19 @@ fn write_backup(path: &std::path::Path) -> Result<(), String> {
 }
 
 /// True when a save must be refused: replacing real notes with an empty
-/// library is a bug, never a user intent.
-fn should_refuse_empty_save(incoming: usize, existing: usize) -> bool {
-    incoming == 0 && existing > 0
+/// library is a bug, not user intent. Deleting the last notebook is a
+/// deliberate action and is allowed through `intentional`.
+fn should_refuse_empty_save(incoming: usize, existing: usize, intentional: bool) -> bool {
+    incoming == 0 && existing > 0 && !intentional
 }
 
 #[tauri::command]
-fn library_save(app: AppHandle, library: Value) -> Result<(), String> {
+fn library_save(app: AppHandle, library: Value, intentional: Option<bool>) -> Result<(), String> {
     let lib = normalize(library)?;
     let path = library_path(&app)?;
     let incoming = lib["notebooks"].as_array().map(|a| a.len()).unwrap_or(0);
     let existing = notebook_count(&path);
-    if should_refuse_empty_save(incoming, existing) {
+    if should_refuse_empty_save(incoming, existing, intentional.unwrap_or(false)) {
         return Err(format!(
             "refusing to overwrite {existing} notebooks with an empty library"
         ));
@@ -403,13 +404,15 @@ mod tests {
         let path = dir.join("library.json");
         fs::write(&path, serde_json::to_string(&good_lib()).unwrap()).unwrap();
         assert_eq!(notebook_count(&path), 1);
-        // 0 incoming over 1 existing -> refused
-        assert!(should_refuse_empty_save(0, 1), "empty save must be refused");
+        // 0 incoming over 1 existing -> refused (bug-shaped save)
+        assert!(should_refuse_empty_save(0, 1, false), "empty save must be refused");
+        // ...but deleting the last notebook is a deliberate user action
+        assert!(!should_refuse_empty_save(0, 1, true), "intentional delete must be allowed");
         // normal saves still allowed
-        assert!(!should_refuse_empty_save(1, 1));
-        assert!(!should_refuse_empty_save(3, 1));
+        assert!(!should_refuse_empty_save(1, 1, false));
+        assert!(!should_refuse_empty_save(3, 1, false));
         // first-ever launch (nothing on disk) must still be allowed
-        assert!(!should_refuse_empty_save(0, 0));
+        assert!(!should_refuse_empty_save(0, 0, false));
         // a backup copy is produced before overwrite
         write_backup(&path).unwrap();
         assert!(path.with_extension("json.bak").exists());

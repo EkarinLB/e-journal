@@ -41,7 +41,7 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
 ipcMain.handle('library:load', () => store.load());
-ipcMain.handle('library:save', (_evt, library) => { store.save(library); return true; });
+ipcMain.handle('library:save', (_evt, library, intentional) => { store.save(library, !!intentional); return true; });
 
 ipcMain.handle('library:export', async (_evt, library) => {
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
