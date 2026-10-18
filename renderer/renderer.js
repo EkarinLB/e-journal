@@ -111,6 +111,20 @@
     saveTimer = null;
     await writeLibrary(intentional);
   }
+  // Last line of defence for still-debounced edits (e.g. a drag or an eraser
+  // sweep): flush when the page is hidden or the window goes away, so a
+  // pending save is not silently discarded.
+  function installSaveFlush() {
+    const flush = () => {
+      if (!saveTimer) return;
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      writeLibrary(false);
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+  }
 
   function toast(msg) {
     const t = $('toast');
@@ -398,13 +412,16 @@
           state.undoStack = state.undoStack.filter((u) => !hits.includes(u.strokeId));
           state.redoStack = [];
           toast(`Scribbled out ${hits.length} stroke${hits.length > 1 ? 's' : ''}`);
-          scheduleSave(); redrawPage(pg.id); return;
+          saveNow(); redrawPage(pg.id); return;
         }
       }
       pg.strokes.push(d.stroke);
       state.undoStack.push({ pageId: pg.id, strokeId: d.stroke.id, stroke: d.stroke });
       state.redoStack = [];
-      scheduleSave(); redrawPage(pg.id);
+      // A finished stroke is a discrete user action, so it is written to disk
+      // at once. Debouncing here would lose the last strokes of a session if
+      // the window closed within the debounce window.
+      saveNow(); redrawPage(pg.id);
     };
     canvas.addEventListener('pointerup', (evt) => { logPen('up', evt); finish(evt); });
     canvas.addEventListener('pointercancel', (evt) => { logPen('cancel', evt); finish(evt); }); // keep partial ink, never drop it
@@ -861,6 +878,7 @@
       if (nb.ruled === undefined) nb.ruled = true;
       nb.pages.forEach((pg, i) => { pg.order = i; pg.width = PAGE_W; pg.height = PAGE_H; pg.images = pg.images || []; });
     }
+    installSaveFlush();
     renderHome();
   })().catch(console.error);
 })();

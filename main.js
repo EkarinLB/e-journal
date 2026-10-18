@@ -16,6 +16,11 @@ let store;
 let win;
 
 function libraryPath() {
+  // E_JOURNAL_DATA_DIR lets automated tests run against a throwaway library
+  // instead of the user's real one. Unset in normal use.
+  if (process.env.E_JOURNAL_DATA_DIR) {
+    return path.join(process.env.E_JOURNAL_DATA_DIR, 'e-journal-library.json');
+  }
   return path.join(app.getPath('userData'), 'e-journal-library.json');
 }
 

@@ -76,23 +76,21 @@ jobs:
 
       - name: Install Freedesktop SDKs
         run: |
-          # GitHub runners do not permit flatpak --system operations as the
-          # runner user, so everything is installed into the user installation.
-          flatpak --user remote-add --if-not-exists flathub \
+          # The SDK must be visible to flatpak-builder, which resolves runtimes
+          # from the SYSTEM installation. Installing as the runner user (even
+          # with --user) leaves the builder unable to find them, so use sudo.
+          sudo flatpak --system remote-add --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak --user install -y org.freedesktop.Platform//24.08 \
+          sudo flatpak --system install -y org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08 \
             org.freedesktop.Sdk.Extension.rust-stable//24.08
-          # optional graphics extension; do not fail the build if unavailable
-          flatpak --user install -y \
-            org.freedesktop.Platform.GL//24.08 || true
 
       - name: Build flatpak
         run: |
           # flatpak-builder takes a build DIRECTORY *and* the manifest:
           #   flatpak-builder [options] DIRECTORY MANIFEST
           # No --disable-download: the manifest pulls sources from git.
-          flatpak-builder --user --force-clean --repo=repo \
+          flatpak-builder --force-clean -y --repo=repo \
             flatpak-build flatpak/com.ejournal.app.yml
           # flatpak-builder exports to the repo's default branch (master),
           # so bundle from master rather than inventing a branch name.
