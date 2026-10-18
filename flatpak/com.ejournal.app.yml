@@ -16,7 +16,7 @@ runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 base: org.freedesktop.Platform
 base-version: '24.08'
-command: E-Journal
+command: e-journal
 
 finish-args:
   - --share=ipc
@@ -36,11 +36,15 @@ build-options:
     LIBSQLITE3_FLAGS: -DSQLITE_ENABLE_FTS5
 
 modules:
-  - name: E-Journal
+  - name: e-journal
     buildsystem: simple
     build-commands:
       - npm install --no-audit --no-fund
-      - npx tauri build --bundles deb
+      # Build the Linux executable only; packaging (.deb) is pointless here.
+      - npx tauri build --no-bundle
+      # The app binary itself is what Flatpak runs — without this step the
+      # bundle would contain desktop files but no executable.
+      - install -Dm755 src-tauri/target/release/e-journal /app/bin/e-journal
     sources:
       - type: git
         url: https://github.com/EkarinLB/e-journal.git
