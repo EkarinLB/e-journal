@@ -23,6 +23,77 @@ Local-first ink notebook for Windows and Linux. Clean-room original code.
 > (e.g. notebooks contain ordered pages; journal files are SQLite-based),
 > then write our own code. Name, icons, and artwork are ours.
 
+## Requirements
+
+### Windows
+
+| Requirement | Detail |
+|---|---|
+| Operating system | Windows 10 version 1809 (April 2018 update) or newer, or Windows 11 |
+| Architecture | 64-bit (x86-64) |
+| Extra runtimes | **None** — see below |
+| Disk space | ~30 MB installed |
+| Internet | Only at install time, and only if the WebView2 runtime is missing |
+
+There are two installers; both are equivalent and either is fine:
+
+- `E-Journal_<version>_x64-setup.exe` — standard installer (NSIS), installs for
+  the current user without administrator rights
+- `E-Journal_<version>_x64_en-US.msi` — MSI for managed/enterprise deployment
+
+**Do I need to install anything first?** On a current Windows 10 or 11 machine,
+no. The app's UI is rendered by the *Microsoft Edge WebView2 Runtime*, which
+ships as part of Windows 10 (1809+) and Windows 11. The installer checks for it
+and, if it is genuinely missing (older or heavily modified systems), downloads
+and runs Microsoft's official bootstrapper for you — that is the only step that
+needs a network connection.
+
+You do **not** need the Microsoft Visual C++ Redistributable. The binary is
+statically linked against the Visual C++ runtime and only uses the Universal
+CRT (`api-ms-win-crt-*`), which is built into Windows itself.
+
+Windows 7 and 8.1 are not supported: WebView2 does not run reliably there and
+Tauri v2 does not target them.
+
+### Linux
+
+The Flatpak is the simplest option and pulls in every dependency for you:
+
+```sh
+flatpak install flathub com.ejournal.app    # after the app is published
+```
+
+For the `.deb`, install it like any other Debian/Ubuntu package
+(`sudo apt install ./E-Journal_<version>_amd64.deb`); the required WebKitGTK
+libraries are pulled in automatically as package dependencies.
+
+For the AppImage, most distributions need FUSE2 enabled first, which is the
+usual cause of "AppImages require FUSE" errors:
+
+```sh
+sudo apt install libfuse2      # Debian/Ubuntu
+```
+
+### macOS
+
+Not provided. There is no macOS build.
+
+## Installing
+
+**Windows:** download the `.exe` installer and run it. It installs for the
+current user into `%LOCALAPPDATA%\E-Journal` and adds an entry to
+Settings → Apps so you can uninstall normally.
+
+Your notes are stored in a single readable file:
+
+```
+%APPDATA%\E-Journal\e-journal-library.json
+```
+
+Because it is plain JSON (not a proprietary database), your notebooks can be
+backed up by copying that one file. Earlier locations from previous versions are
+migrated automatically on first launch.
+
 ## What works today
 
 - Notebooks with pages, pressure-sensitive pen with three nib styles,
