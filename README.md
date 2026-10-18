@@ -4,21 +4,36 @@ Local-first ink notebook for Windows and Linux. A clean-room, original
 implementation inspired by the *behavior* of pen-and-paper journal apps —
 not a copy of any Microsoft software.
 
+## Status: v0.11 — beta, not feature-complete
+
+Local-first ink notebook for Windows and Linux. Clean-room original code.
+
+### Known gaps (tracked deliberately)
+- No backup/version history — one library file, overwritten on save
+- No typed text, sticky notes, shapes, or ruled-page templates
+- Search covers notebook titles only (no handwriting recognition)
+- `.ink` import shows page snapshots; 3 of 25 sample files carry no
+  snapshot and import blank (stroke-blob decoding still outstanding)
+- No PDF/PNG export — ink is not yet portable out of the app
+- Single flat shelf: no tags, favorites, or sorting
+
 > **Legal boundary (not legal advice):** this repo contains only original
 > code. Do not commit Microsoft binaries, decompiled output, app assets,
 > icons, or trademarks here. We learn *facts* from the installed app
 > (e.g. notebooks contain ordered pages; journal files are SQLite-based),
 > then write our own code. Name, icons, and artwork are ours.
 
-## Status: v0.5
+## What works today
 
-- Notebooks with pages, pressure-sensitive pen, pencil, highlighter, eraser
+- Notebooks with pages, pressure-sensitive pen with three nib styles,
+  translucent highlighter, eraser, image insert/move/delete
 - Scribble-to-delete gesture, Chaikin stroke smoothing, ruled paper
 - Home shelf, continuous page scroll (new pages on scroll-down), page dock
-- Zoom, hideable UI, light/dark themes, redo, image insert/move/delete
+- Zoom, hideable UI, light/dark themes, undo/redo, color picker
 - Local JSON library (no account, no cloud), `.openjournal` export/import
-- Read-only `.ink` import (pages with snapshots show your ink)
-- Images with move/delete, pen-locked input, pen event log for diagnostics
+- Read-only `.ink` import, drag-and-drop for images/notebooks
+- Data at `%APPDATA%\OpenJournal\openjournal-library.json` (legacy
+  locations are auto-migrated on first run)
 
 ## Run (Electron dev shell)
 

@@ -838,7 +838,7 @@
 
   /* ================= boot ================= */
   (async () => {
-    $('ver').textContent = 'v1.0';
+    $('ver').textContent = 'v0.11 beta';
     let theme = 'light';
     try { theme = localStorage.getItem('oj-theme') || 'light'; } catch (_) {}
     applyTheme(theme);
