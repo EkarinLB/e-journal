@@ -28,6 +28,16 @@ rustc --version
 echo "==> Verifying webkit2gtk is visible to pkg-config"
 pkg-config --modversion webkit2gtk-4.1
 
+# Flatpak tooling is needed to build the Flathub bundle. Optional: if you only
+# want AppImage/.deb packages you can skip this and Ctrl-C here.
+echo "==> Installing Flatpak and flatpak-builder"
+sudo apt-get install -y --no-install-recommends \
+  flatpak flatpak-builder
+
+echo "==> Verifying flatpak is usable"
+flatpak --version
+flatpak-builder --version
+
 echo
 echo "Linux build environment ready."
 echo "Next: bash scripts/build-linux.sh"
