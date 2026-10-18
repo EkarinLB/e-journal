@@ -3,18 +3,17 @@ name: Build native packages
 on:
   push:
     branches: [main, master]
+    tags: ['v*']
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  test:
+    name: Tests (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-22.04
-            args: ""
-          - os: windows-latest
-            args: ""
+        os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -23,34 +22,71 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libgtk-3-dev
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: openjournal/package-lock.json
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os == 'Linux'
 
-      - name: Install frontend deps
-        working-directory: openjournal
-        run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os == 'Windows'
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
 
-      - name: Run JS tests
-        working-directory: openjournal
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: JS tests
         run: npm test
 
-      - name: Run Rust tests
-        working-directory: openjournal
+      - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
-      - name: Build Tauri app
+  build:
+    name: Package (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            bundles: deb,appimage
+          - os: windows-latest
+            bundles: msi,nsis
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libgtk-3-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build Tauri bundles
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: openjournal
-          args: ${{ matrix.args }}
+          tagName: v${{ github.run_number }}
+          releaseName: "OpenJournal ${{ github.ref_name }} (build ${{ github.run_number }})"
+          releaseDraft: true
+          prerelease: true
+          args: --bundles ${{ matrix.bundles }}
