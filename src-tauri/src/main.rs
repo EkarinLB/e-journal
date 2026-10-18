@@ -177,10 +177,35 @@ fn library_load(app: AppHandle) -> Result<Value, String> {
     normalize(raw)
 }
 
+/// Keep one rolling backup of the previous good library. Written before
+/// every overwrite so a bad write can never destroy the last known-good copy.
+fn write_backup(path: &std::path::Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let bak = path.with_extension("json.bak");
+    let _ = fs::copy(path, &bak);
+    Ok(())
+}
+
+/// True when a save must be refused: replacing real notes with an empty
+/// library is a bug, never a user intent.
+fn should_refuse_empty_save(incoming: usize, existing: usize) -> bool {
+    incoming == 0 && existing > 0
+}
+
 #[tauri::command]
 fn library_save(app: AppHandle, library: Value) -> Result<(), String> {
     let lib = normalize(library)?;
     let path = library_path(&app)?;
+    let incoming = lib["notebooks"].as_array().map(|a| a.len()).unwrap_or(0);
+    let existing = notebook_count(&path);
+    if should_refuse_empty_save(incoming, existing) {
+        return Err(format!(
+            "refusing to overwrite {existing} notebooks with an empty library"
+        ));
+    }
+    write_backup(&path)?;
     let tmp = path.with_extension("json.tmp");
     let payload =
         serde_json::to_string(&serde_json::json!({ "version": 1, "notebooks": lib["notebooks"] }))
@@ -367,6 +392,28 @@ mod tests {
         );
         // The current canonical location must never be treated as a source.
         assert!(!cands.contains(&base.join("E-Journal").join(LIBRARY_FILE)));
+    }
+
+    #[test]
+    fn empty_save_is_refused_over_real_data() {
+        // Replicates the save guard: an empty library must not replace a
+        // populated one, because that silently destroys a user's notes.
+        let dir = std::env::temp_dir().join(format!("oj-guard-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("library.json");
+        fs::write(&path, serde_json::to_string(&good_lib()).unwrap()).unwrap();
+        assert_eq!(notebook_count(&path), 1);
+        // 0 incoming over 1 existing -> refused
+        assert!(should_refuse_empty_save(0, 1), "empty save must be refused");
+        // normal saves still allowed
+        assert!(!should_refuse_empty_save(1, 1));
+        assert!(!should_refuse_empty_save(3, 1));
+        // first-ever launch (nothing on disk) must still be allowed
+        assert!(!should_refuse_empty_save(0, 0));
+        // a backup copy is produced before overwrite
+        write_backup(&path).unwrap();
+        assert!(path.with_extension("json.bak").exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
