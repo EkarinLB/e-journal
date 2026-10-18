@@ -26,23 +26,37 @@ fn canonical_dir() -> Result<std::path::PathBuf, String> {
     Ok(dir)
 }
 
-/// Older locations that may hold a real library, newest convention last:
-///   - %APPDATA%\com.ejournal.app   (early native builds, identifier-keyed)
-///   - %APPDATA%\E-Journal           (pre-rename canonical folder)
-///   - %APPDATA%\E-Journal           (Electron shell)
-fn legacy_paths(app: &AppHandle) -> Vec<std::path::PathBuf> {
+/// Library filename used before the E-Journal rename. Migration must keep
+/// looking for this exact name in the pre-rename locations, otherwise a
+/// rebranding pass can silently rewrite history away.
+const LEGACY_LIBRARY_FILE: &str = "openjournal-library.json";
+
+/// Pre-rename locations, newest convention last:
+///   - %APPDATA%\<old-identifier>\openjournal-library.json  (identifier-keyed)
+///   - %APPDATA%\OpenJournal\openjournal-library.json      (pre-rename canonical)
+///   - %APPDATA%\openjournal\openjournal-library.json      (Electron shell;
+///     identical to the line above on case-insensitive filesystems)
+fn legacy_candidates(
+    base: &std::path::Path,
+    app_data: Option<&std::path::Path>,
+) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
-    if let Ok(d) = app.path().app_data_dir() {
-        out.push(d.join("E-Journal-library.json"));
+    if let Some(d) = app_data {
+        out.push(d.join(LEGACY_LIBRARY_FILE));
         out.push(d.join(LIBRARY_FILE));
     }
-    if let Some(base) = std::env::var_os("APPDATA") {
-        let base = std::path::PathBuf::from(base);
-        out.push(base.join("E-Journal").join("E-Journal-library.json"));
-        out.push(base.join("E-Journal").join("E-Journal-library.json"));
-        out.push(base.join("E-Journal").join(LIBRARY_FILE));
-    }
+    out.push(base.join("OpenJournal").join(LEGACY_LIBRARY_FILE));
+    out.push(base.join("openjournal").join(LEGACY_LIBRARY_FILE));
+    out.push(base.join("openjournal").join(LIBRARY_FILE));
     out
+}
+
+fn legacy_paths(app: &AppHandle) -> Vec<std::path::PathBuf> {
+    let base = std::env::var_os("APPDATA")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_default();
+    let app_data = app.path().app_data_dir().ok();
+    legacy_candidates(&base, app_data.as_deref())
 }
 
 fn library_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -321,6 +335,29 @@ mod tests {
     #[test]
     fn defaults_missing_notebooks() {
         assert_eq!(normalize(json!({})).unwrap()["notebooks"], json!([]));
+    }
+
+    #[test]
+    fn migration_still_targets_pre_rename_locations() {
+        // Guards against a rebranding pass rewriting the *old* paths away:
+        // migration must keep looking for the legacy filename in the old
+        // folders, or existing notebooks silently vanish on upgrade.
+        let base = std::path::Path::new("/appdata");
+        let cands = legacy_candidates(base, Some(std::path::Path::new("/appdata/com.old.id")));
+        assert!(
+            cands.contains(&base.join("OpenJournal").join(LEGACY_LIBRARY_FILE)),
+            "missing pre-rename canonical path in {cands:?}"
+        );
+        assert!(
+            cands.contains(&base.join("openjournal").join(LEGACY_LIBRARY_FILE)),
+            "missing Electron-shell path in {cands:?}"
+        );
+        assert!(
+            cands.contains(&std::path::Path::new("/appdata/com.old.id").join(LEGACY_LIBRARY_FILE)),
+            "missing identifier-keyed path in {cands:?}"
+        );
+        // The current canonical location must never be treated as a source.
+        assert!(!cands.contains(&base.join("E-Journal").join(LIBRARY_FILE)));
     }
 
     #[test]
