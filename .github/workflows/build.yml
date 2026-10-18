@@ -76,17 +76,22 @@ jobs:
 
       - name: Install Freedesktop SDKs
         run: |
-          flatpak --system remote-add --if-not-exists flathub \
+          # GitHub runners do not permit flatpak --system operations as the
+          # runner user, so everything is installed into the user installation.
+          flatpak --user remote-add --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak --system install -y org.freedesktop.Platform//24.08 \
+          flatpak --user install -y org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08 \
             org.freedesktop.Sdk.Extension.rust-stable//24.08
-          flatpak --system install -y org.freedesktop.Platform.24.08//extra=//share/extensions/vulkan/
+          # optional graphics extension; do not fail the build if unavailable
+          flatpak --user install -y \
+            org.freedesktop.Platform.24.08//extra=//share/extensions/vulkan/ || true
 
       - name: Build flatpak
         run: |
-          flatpak-builder --user --force-clean --disable-download \
-            --repo=repo flatpak/com.ejournal.app.yml
+          # No --disable-download: the manifest pulls sources from git.
+          flatpak-builder --user --force-clean --repo=repo \
+            flatpak/com.ejournal.app.yml
           flatpak build-bundle repo e-journal.flatpak com.ejournal.app stable
 
       - name: Upload flatpak
