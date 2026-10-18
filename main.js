@@ -22,8 +22,10 @@ function libraryPath() {
 function createWindow() {
   store = new LibraryStore(libraryPath());
   win = new BrowserWindow({
-    width: 1280,
-    height: 860,
+    width: 1440,
+    height: 900,
+    minWidth: 900,
+    minHeight: 600,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
