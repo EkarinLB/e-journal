@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.openjournal.app</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>OpenJournal</name>
+  <summary>Local-first ink notebook for pen and paper replacement</summary>
+
+  <description>
+    <p>
+      OpenJournal is a local-first notebook for handwriting, drawing and note
+      taking. Your notes live in ordinary files on your own machine — no
+      account, no cloud, no telemetry — so the same notebook opens on Windows
+      and Linux.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Pressure-sensitive pen with ballpoint, fountain and brush nib styles</li>
+      <li>Translucent highlighter, eraser, and scribble-to-delete gesture</li>
+      <li>Smoothed ink with ruled pages and a margin line</li>
+      <li>Continuous vertical page scroll with automatic new pages</li>
+      <li>Image insertion, selection, move and delete; drag and drop supported</li>
+      <li>Zoom, hideable distraction-free interface, light and dark themes</li>
+      <li>Undo and redo across strokes</li>
+      <li>Read-only import of Microsoft Journal .ink files</li>
+      <li>Portable .openjournal export and import</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.openjournal.app.desktop</launchable>
+
+  <categories>
+    <category>Office</category>
+    <category>Utility</category>
+  </categories>
+
+  <keywords>
+    <keyword>notes</keyword>
+    <keyword>notebook</keyword>
+    <keyword>ink</keyword>
+    <keyword>handwriting</keyword>
+    <keyword>pen</keyword>
+    <keyword>journal</keyword>
+    <keyword>whiteboard</keyword>
+    <keyword>offline</keyword>
+  </keywords>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </recommends>
+
+  <content_rating type="oars-1.1"/>
+
+  <developer id="com.openjournal">
+    <name>The OpenJournal contributors</name>
+  </developer>
+
+  <url type="homepage">https://github.com/OWNER/openjournal</url>
+  <url type="bugtracker">https://github.com/OWNER/openjournal/issues</url>
+</component>
