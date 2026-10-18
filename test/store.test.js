@@ -49,4 +49,24 @@ const back2 = deserializeLibrary(serializeLibrary({ notebooks: [nb2] }));
 assert.strictEqual(back2.notebooks[0].pages[0].images[0].w, 300);
 assert.strictEqual(validateLibrary({ notebooks: [{ id: 'x', name: 'y', pages: [{ id: 'p', strokes: [], images: [{ id: 1 }] }] }] }).ok, false);
 
-console.log('store.test.js: all 5 checks passed');
+// 6. An empty save must not silently destroy real notebooks, and the previous
+//    state must be recoverable from the rolling backup.
+const dir6 = fs.mkdtempSync(path.join(os.tmpdir(), 'oj-guard-'));
+const file6 = path.join(dir6, 'library.json');
+const s6 = new LibraryStore(file6);
+s6.save({ notebooks: [nb, nb2] });
+assert.strictEqual(s6.load().notebooks.length, 2);
+// an accidental empty save (no `intentional` flag) is refused
+assert.throws(() => s6.save({ notebooks: [] }), /refusing to overwrite 2 notebooks/);
+assert.strictEqual(s6.load().notebooks.length, 2, 'data must survive the refused save');
+// but deleting the last notebook deliberately is allowed
+s6.save({ notebooks: [nb] });
+s6.save({ notebooks: [] }, true);
+assert.deepStrictEqual(s6.load().notebooks, []);
+// the backup holds the state from before the last overwrite
+const bak = JSON.parse(fs.readFileSync(path.join(dir6, 'library.json.bak'), 'utf8'));
+assert.strictEqual(bak.notebooks.length, 1, 'backup should hold the previous state');
+assert.strictEqual(bak.notebooks[0].name, 'Physics');
+fs.rmSync(dir6, { recursive: true, force: true });
+
+console.log('store.test.js: all 6 checks passed');
