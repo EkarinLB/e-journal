@@ -1,6 +1,8 @@
 [package]
 name = "E-Journal"
-version = "0.11.0"
+# Must stay in step with package.json and tauri.conf.json. When it drifted, the
+# .deb advertised 0.12.0 while the binary it shipped reported 0.11.0.
+version = "0.12.0"
 edition = "2021"
 
 [build-dependencies]
