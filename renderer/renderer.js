@@ -140,24 +140,12 @@
   });
 
   /* Ink geometry + gestures: shared implementation in lib/ink.js (unit-tested). */
-  const { smoothPoints, scribbleHits } = window.Ink;
+  const { smoothPoints, scribbleHits, strokeWidthAt } = window.Ink;
 
   /* ================= drawing ================= */
-  // Pen nib physics per style. Legacy strokes (no penStyle) keep the
-  // original width*pressure mapping so old notes never change looks.
-  function strokeWidthAt(st, p) {
-    const w = st.width, q = p || 0.5;
-    switch (st.penStyle || (st.tool === 'pencil' ? 'pencil' : 'legacy')) {
-      case 'ball': return w;
-      case 'brush': return Math.max(0.5, w * (0.3 + 1.5 * q));
-      case 'fountain': return Math.max(0.5, w * (0.45 + 0.9 * q));
-      case 'pencil': return Math.max(0.5, w * q);
-      case 'legacy':
-      default: return Math.max(0.5, w * q);
-    }
-  }
-  function drawStrokeOn(ctx, st) {
-    const pts = smoothPoints(st.points);
+  // Nib physics (strokeWidthAt) lives in ink.js so it is unit-tested.
+  function drawStrokeOn(ctx, st, pre) {
+    const pts = pre || smoothPoints(st.points);
     if (pts.length === 0) return;
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -180,11 +168,19 @@
       ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, strokeWidthAt(st, pts[0].p) / 2, 0, 7); ctx.fill();
       ctx.restore(); return;
     }
+    // Variable width needs a stroke() per width change, but consecutive
+    // segments of near-equal width are batched into one path: thousands of
+    // draw calls per frame collapse to a handful.
+    let bucket = -1, open = false;
+    const flush = () => { if (open) { ctx.stroke(); open = false; } };
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1], b = pts[i];
-      ctx.lineWidth = strokeWidthAt(st, ((a.p || 0.5) + (b.p || 0.5)) / 2);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      const w = strokeWidthAt(st, ((a.p || 0.5) + (b.p || 0.5)) / 2);
+      const q = Math.max(1, Math.round(w * 2));
+      if (q !== bucket) { flush(); bucket = q; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(a.x, a.y); open = true; }
+      ctx.lineTo(b.x, b.y);
     }
+    flush();
     ctx.restore();
   }
 
@@ -231,6 +227,10 @@
     if (el.complete && el.naturalWidth > 0) ctx.drawImage(el, 0, 0, PAGE_W, PAGE_H);
   }
 
+  /* Ink is cached in an offscreen layer. Re-drawing every stroke on every
+     pointermove was O(all strokes) per event, which made the app slower the
+     more you wrote. Committed strokes are rasterised once and composited;
+     only the in-progress stroke is drawn live. */
   function redrawPage(pageId) {
     const entry = state.canvases.get(pageId);
     const nb = notebook();
@@ -238,6 +238,17 @@
     const pg = nb.pages.find((p) => p.id === pageId);
     if (!pg) return;
     const { ctx } = entry;
+    if (entry.inkDirty) {
+      const ictx = inkLayer(entry);
+      ictx.setTransform(entry.backing, 0, 0, entry.backing, 0, 0);
+      ictx.clearRect(0, 0, PAGE_W, PAGE_H);
+      // Smoothing runs once here, not on every repaint.
+      for (const st of pg.strokes) {
+        const pts = smoothPoints(st.points);
+        drawStrokeOn(ictx, st, pts);
+      }
+      entry.inkDirty = false;
+    }
     ctx.save();
     ctx.setTransform(entry.backing, 0, 0, entry.backing, 0, 0);
     ctx.clearRect(0, 0, PAGE_W, PAGE_H);
@@ -246,16 +257,45 @@
     if (state.ruled) drawRuled(ctx);
     drawBackgroundOn(ctx, pg, pageId);
     drawImagesOn(ctx, pg, pageId);
-    for (const st of pg.strokes) drawStrokeOn(ctx, st);
+    if (entry.ink) ctx.drawImage(entry.ink, 0, 0, PAGE_W, PAGE_H);
     if (state.drawing && state.drawing.pageId === pageId) drawStrokeOn(ctx, state.drawing.stroke);
     ctx.restore();
+  }
+
+  function inkLayer(entry) {
+    if (!entry.ink || entry.ink.width !== Math.round(PAGE_W * entry.backing)) {
+      entry.ink = document.createElement('canvas');
+      entry.ink.width = Math.round(PAGE_W * entry.backing);
+      entry.ink.height = Math.round(PAGE_H * entry.backing);
+      entry.inkCtx = entry.ink.getContext('2d');
+      entry.inkDirty = true;
+    }
+    return entry.inkCtx;
+  }
+
+  function invalidateInk(pageId) {
+    const entry = state.canvases.get(pageId);
+    if (entry) entry.inkDirty = true;
+  }
+
+  // At most one repaint per animation frame, however many pointermove events
+  // arrive. This alone removes most of the lag on fast strokes.
+  const pendingPaint = new Map();
+  function schedulePaint(pageId) {
+    if (pendingPaint.has(pageId)) return;
+    pendingPaint.set(pageId, requestAnimationFrame(() => {
+      pendingPaint.delete(pageId);
+      redrawPage(pageId);
+    }));
   }
 
   function layoutPages() {
     const wrap = $('pages');
     const base = Math.max(0.2, (wrap.clientWidth - 48) / PAGE_W);
     const display = base * state.zoom;
-    const backing = Math.min(display * (window.devicePixelRatio || 1), 3);
+    // Capped at 2x: beyond that the fills cost more than they visibly improve,
+// and ink is recomposited on every repaint.
+    const backing = Math.min(display * (window.devicePixelRatio || 1), 2);
     for (const [, entry] of state.canvases) {
       entry.backing = backing;
       entry.canvas.style.width = PAGE_W * display + 'px';
@@ -263,7 +303,7 @@
       entry.canvas.width = Math.round(PAGE_W * backing);
       entry.canvas.height = Math.round(PAGE_H * backing);
     }
-    for (const pageId of state.canvases.keys()) redrawPage(pageId);
+    for (const pageId of state.canvases.keys()) { invalidateInk(pageId); redrawPage(pageId); }
     $('zoom-label').textContent = Math.round(state.zoom * 100) + '%';
   }
 
@@ -281,6 +321,7 @@
     const before = pg.strokes.length;
     pg.strokes = pg.strokes.filter((st) =>
       !st.points.some((p, i) => (i > 0 ? distToSeg(pos, st.points[i - 1], p) : Math.hypot(p.x - pos.x, p.y - pos.y)) < 14));
+    if (pg.strokes.length !== before) invalidateInk(pg.id);
     return before - pg.strokes.length;
   }
 
@@ -308,7 +349,7 @@
     const wrap = document.createElement('div');
     wrap.className = 'sheet';
     const canvas = document.createElement('canvas');
-    const entry = { canvas, ctx: canvas.getContext('2d'), backing: 1 };
+    const entry = { canvas, ctx: canvas.getContext('2d'), backing: 1, ink: null, inkCtx: null, inkDirty: true };
     state.canvases.set(pg.id, entry);
     wrap.appendChild(canvas);
     attachInk(canvas, pg.id);
@@ -331,6 +372,7 @@
           const pg0 = nb0 ? nb0.pages.find((p) => p.id === d0.pageId) : null;
           if (pg0 && d0.stroke.points.length > 0) {
             pg0.strokes.push(d0.stroke);
+            invalidateInk(pg0.id);
             state.undoStack.push({ pageId: pg0.id, strokeId: d0.stroke.id, stroke: d0.stroke });
             state.redoStack = [];
             scheduleSave(); redrawPage(pg0.id);
@@ -390,7 +432,9 @@
         const pos = canvasPos(canvas, e);
         d.stroke.points.push({ x: pos.x, y: pos.y, p: penPressure(e) });
       }
-      redrawPage(d.pageId);
+      // Coalesced events can fire several times per frame. Repainting on each
+      // one wastes work; one repaint per frame is all the display can show.
+      schedulePaint(d.pageId);
     });
     const finish = (evt) => {
       if (state.dragImg) {
@@ -409,6 +453,7 @@
         const hits = scribbleHits(d.stroke.points, pg.strokes);
         if (hits) {
           pg.strokes = pg.strokes.filter((s) => !hits.includes(s.id));
+          invalidateInk(pg.id);
           state.undoStack = state.undoStack.filter((u) => !hits.includes(u.strokeId));
           state.redoStack = [];
           toast(`Scribbled out ${hits.length} stroke${hits.length > 1 ? 's' : ''}`);
@@ -416,6 +461,7 @@
         }
       }
       pg.strokes.push(d.stroke);
+      invalidateInk(pg.id);
       state.undoStack.push({ pageId: pg.id, strokeId: d.stroke.id, stroke: d.stroke });
       state.redoStack = [];
       // A finished stroke is a discrete user action, so it is written to disk
@@ -629,6 +675,7 @@
     if (pg) {
       const gone = pg.strokes.find((s) => s.id === u.strokeId);
       pg.strokes = pg.strokes.filter((s) => s.id !== u.strokeId);
+      invalidateInk(pg.id);
       if (gone) state.redoStack.push({ pageId: pg.id, stroke: gone });
       scheduleSave(); redrawPage(pg.id);
     }
@@ -639,6 +686,7 @@
     const pg = nb.pages.find((p) => p.id === r.pageId);
     if (pg && !pg.strokes.some((s) => s.id === r.stroke.id)) {
       pg.strokes.push(r.stroke);
+      invalidateInk(pg.id);
       state.undoStack.push({ pageId: pg.id, strokeId: r.stroke.id, stroke: r.stroke });
       scheduleSave(); redrawPage(pg.id);
     }
@@ -647,7 +695,7 @@
     const nb = notebook(); if (!nb) return;
     const id = mostVisiblePage();
     const pg = nb.pages.find((p) => p.id === id);
-    if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; state.undoStack = state.undoStack.filter((u) => u.pageId !== pg.id); state.redoStack = []; await saveNow(); redrawPage(pg.id); }
+    if (pg && pg.strokes.length > 0 && (await modalConfirm('Clear this page?', 'All strokes on the visible page will be removed.', 'Clear'))) { pg.strokes = []; state.undoStack = state.undoStack.filter((u) => u.pageId !== pg.id); state.redoStack = []; invalidateInk(pg.id); await saveNow(); redrawPage(pg.id); }
   };
   function insertImageDataUrl(dataUrl, name, x, y) {
     const nb = notebook(); if (!nb) return;

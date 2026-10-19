@@ -82,7 +82,24 @@
     return null;
   }
 
-  const api = { strokeLength, bbox, boxesOverlap, segInt, downsample, smoothPoints, scribbleHits };
+  // Pen nib physics per style. Legacy strokes (no penStyle) keep the
+  // original width*pressure mapping so old notes never change looks.
+  // The ranges are deliberately wide: at the default width of 3 the original
+  // multipliers differed by less than a fifth of a pixel, which made the
+  // styles indistinguishable in real use.
+  function strokeWidthAt(st, p) {
+    const w = st.width, q = p === undefined ? 0.5 : p;
+    switch (st.penStyle || (st.tool === 'pencil' ? 'pencil' : 'legacy')) {
+      case 'ball': return w * 1.25;                             // uniform, broad
+      case 'brush': return Math.max(0.4, w * (0.25 + 2.6 * q)); // dramatic taper
+      case 'fountain': return Math.max(0.35, w * (0.3 + 1.05 * q)); // thin, delicate
+      case 'pencil': return Math.max(0.5, w * q);
+      case 'legacy':
+      default: return Math.max(0.5, w * q);
+    }
+  }
+
+  const api = { strokeLength, bbox, boxesOverlap, segInt, downsample, smoothPoints, scribbleHits, strokeWidthAt };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Ink = api;
 })(typeof self !== 'undefined' ? self : globalThis);

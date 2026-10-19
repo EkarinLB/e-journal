@@ -52,4 +52,25 @@ assert.strictEqual(Ink.scribbleHits(wavy, [word]), null);
 // 5. Scribble over empty space hits nothing.
 assert.strictEqual(Ink.scribbleHits(scribble, [{ id: 'far', points: line(0, 900, 300, 900, 10) }]), null);
 
-console.log('ink.test.js: all 5 checks passed');
+// 6. Pen styles must be visibly different at the DEFAULT width. They used to
+//    differ by well under a pixel, so switching style appeared to do nothing.
+const W = 3; // default slider value
+const at = (style, p) => Ink.strokeWidthAt({ width: W, penStyle: style, tool: 'pen' }, p);
+const ballMid = at('ball', 0.5), fountainMid = at('fountain', 0.5), brushMid = at('brush', 0.5);
+assert.ok(Math.abs(ballMid - fountainMid) > 0.5, `ball vs fountain too close: ${ballMid} vs ${fountainMid}`);
+assert.ok(Math.abs(brushMid - fountainMid) > 0.5, `brush vs fountain too close: ${brushMid} vs ${fountainMid}`);
+assert.ok(Math.abs(brushMid - ballMid) > 0.5, `brush vs ball too close: ${brushMid} vs ${ballMid}`);
+
+// 7. Ballpoint is uniform; brush and fountain respond to pressure.
+assert.strictEqual(at('ball', 0.1), at('ball', 0.9), 'ballpoint must be pressure-independent');
+assert.ok(at('brush', 0.95) > at('brush', 0.1) * 2, 'brush must taper strongly with pressure');
+assert.ok(at('fountain', 0.95) > at('fountain', 0.1), 'fountain must respond to pressure');
+
+// 8. Legacy strokes (no penStyle) keep their original look.
+assert.strictEqual(
+  Ink.strokeWidthAt({ width: W, tool: 'pen' }, 0.5),
+  Math.max(0.5, W * 0.5),
+  'legacy strokes must be unchanged'
+);
+
+console.log('ink.test.js: all 8 checks passed');
