@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.log
 src-tauri/target/
+
+# Rust build output for the native rewrite. A Cargo target/ directory holds
+# thousands of artifacts; committing it bloats the repo without bound.
+target/
+native/target/

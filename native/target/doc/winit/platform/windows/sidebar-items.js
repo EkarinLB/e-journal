@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["BackdropType","CornerPreference"],"struct":["AnyThread","Color"],"trait":["DeviceIdExtWindows","EventLoopBuilderExtWindows","IconExtWindows","MonitorHandleExtWindows","WindowAttributesExtWindows","WindowBorrowExtWindows","WindowExtWindows"],"type":["HMENU","HMONITOR","HWND"]};

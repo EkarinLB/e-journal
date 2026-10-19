@@ -1,1 +1,0 @@
-C:\Users\Adam\Documents\Default\ Project\openjournal\native\target\debug\libejournal.rlib: C:\Users\Adam\Documents\Default\ Project\openjournal\native\src\ink.rs C:\Users\Adam\Documents\Default\ Project\openjournal\native\src\lib.rs C:\Users\Adam\Documents\Default\ Project\openjournal\native\src\store.rs
