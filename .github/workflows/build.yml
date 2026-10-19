@@ -12,6 +12,30 @@ permissions:
   contents: write
 
 jobs:
+  # The native Rust rewrite: the real product. Verified on both target
+  # platforms from the first commit, so portability regressions surface in CI
+  # rather than on a user's machine.
+  native:
+    name: Native core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev
+      # `--features headless` skips the windowing module: the logic under test
+      # is pure Rust and needs no display.
+      - name: Test native core
+        run: cargo test --manifest-path native/Cargo.toml --features headless
+      - name: Clippy
+        run: cargo clippy --manifest-path native/Cargo.toml --features headless -- -D warnings
   test:
     name: Tests (${{ matrix.os }})
     strategy:
@@ -52,10 +76,13 @@ jobs:
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+  # Flatpak packaging is paused while the app is rewritten in native Rust.
+  # The current manifest targets a webview-based Tauri build that is being
+  # replaced; once the native binary lands, Flatpak becomes simpler again
+  # (no Node, no WebKit) and this job is worth re-enabling.
   flatpak:
-    name: Flatpak bundle
-    # Deliberately does NOT `needs: build`. This job is slow and best-effort;
-    # it must never block or delay the Windows/Linux package builds.
+    name: Flatpak bundle (paused)
+    if: false
     needs: test
     runs-on: ubuntu-22.04
     steps:

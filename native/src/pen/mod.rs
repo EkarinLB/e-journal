@@ -1,18 +1,29 @@
-//! Pen input: the platform-independent policy layer.
+//! Pen input: the shared policy layer plus one backend per platform.
 //!
 //! Both backends reduce their native events to these types before the ink
 //! code sees them, so no renderer code ever branches on operating system.
 //!
-//! - Windows: `WM_POINTER_DOWN` / `WM_POINTER_UPDATE` / `WM_POINTER_UP`.
-//!   Win32 has already merged mouse and pen into a single pointer stack and
-//!   normalises pressure to 0..=1, which is why pen apps read pointer
-//!   messages rather than raw mouse input.
-//! - Linux: libinput tablet-tool events, i.e. `ABS_MT_PRESSURE` on the
-//!   tablet device, with `BTN_TOOL_PEN` / `BTN_TOOL_RUBBER` identifying the
-//!   tool. libinput also normalises pressure to 0..=1.
+//! - Windows (`win`): `WM_POINTER_*`. Win32 merged mouse, pen and touch
+//!   into one pointer stack and normalises pressure to 0..=1.
+//! - Linux (`linux`): libinput tablet-tool events, i.e. `ABS_MT_PRESSURE`
+//!   with `BTN_TOOL_PEN` / `BTN_TOOL_RUBBER` naming the tool. libinput also
+//!   normalises pressure to 0..=1.
 //!
-//! Both therefore produce identical `PenEvent`s, and the palm-rejection rules
+//! Because both produce identical `PenEvent`s, the palm-rejection rules
 //! are written once and proved by unit tests on either platform.
+
+#[cfg(target_os = "windows")]
+mod win;
+#[cfg(target_os = "linux")]
+mod linux;
+
+// The Windows backend translates raw window messages; the Linux one exposes
+// `TabletState` for a libinput event loop to feed. Both are re-exported so
+// callers use one name regardless of platform.
+#[cfg(target_os = "windows")]
+pub use win::translate;
+#[cfg(target_os = "linux")]
+pub use linux::{TabletState, Tool};
 
 /// What produced an event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

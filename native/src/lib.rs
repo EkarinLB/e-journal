@@ -12,7 +12,11 @@ pub mod page;
 pub mod pen;
 
 /// Native window: real pen input, rasterised without a webview.
-#[cfg(not(all(test, feature = "headless")))]
+///
+/// Not yet wired to a window: winit 0.30 removed the pressure accessor this
+/// needs, so input arrives through the platform backends in `pen` instead. The
+/// window, renderer and undo stack follow once the core is complete.
+#[cfg(all(not(test), not(feature = "headless"), feature = "window"))]
 pub mod app;
 
 /// Library format, matching the existing on-disk JSON so notebooks written

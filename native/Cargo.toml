@@ -20,9 +20,25 @@ tiny-skia = "0.11"
 # so this is what puts rasterised pixels on screen without a GPU driver.
 softbuffer = "0.4"
 
+# Windows pen input. WM_POINTER_* carries true stylus pressure and identifies
+# pen vs touch, which winit 0.30 no longer exposes. Linux uses libinput
+# instead; see src/pen/mod.rs for the shared policy both feed.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    # WM_POINTER_* and the POINTER_* structs live here.
+    "Win32_UI_Input_Pointer",
+    "Win32_System_LibraryLoader",
+] }
+
 [features]
 default = []
 # Tests skip the windowing module; the logic under test is all pure Rust.
 headless = []
+# The window, input loop and presentation layer. Off by default so the core
+# can be tested and cross-checked on CI without a display.
+window = []
 
 [target.x86_64-pc-windows-msvc.dependencies]

@@ -157,7 +157,7 @@ pub fn visible_pages(
 ) -> Vec<PageId> {
     let mut out: Vec<PageId> = Vec::new();
     for (i, p) in pages.iter().enumerate() {
-        if p.intersects(view_top - view_top, view_bottom) {
+        if p.intersects(view_top, view_bottom) {
             out.push(PageId(i));
         }
     }
