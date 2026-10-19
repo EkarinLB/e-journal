@@ -23,6 +23,10 @@
         pickFiles: () => invoke('media_pick_files'),
         saveFile: (name, bytes) => invoke('file_save', { name, bytes }),
         sqlWasmBinary: () => invoke('util_sqlwasm').then((a) => new Uint8Array(a)),
+        updateCheck: () => invoke('update_check'),
+        downloadUpdate: (url) => invoke('download_update', { url }),
+        openLibraryFolder: () => invoke('open_library_folder'),
+        libraryPathGet: () => invoke('library_path_get'),
       };
     }
     return null;
@@ -71,6 +75,8 @@
     selectedImage: null,     // image id (select tool)
     dragImg: null,           // { pageId, pointerId, imageId, dx, dy }
     imgCache: new Map(),     // image id -> HTMLImageElement
+    pressureEnabled: true,   // master toggle for pressure sensitivity
+    pressureSensitivity: 1,  // multiplier applied to pressure (0 = off effect)
   };
 
   // Pen diagnostics: lightweight ring buffer. The topbar "pen log" button
@@ -84,10 +90,17 @@
     } catch (_) {}
   }
   function penPressure(evt) {
+    // When pressure sensitivity is turned off, every stroke draws at uniform
+    // width regardless of how hard the user presses.
+    if (!state.pressureEnabled) return 1;
     // Fast light flicks can report near-zero pressure (hairline) or exact
     // zero; clamp the floor so pen strokes stay visible, keep expression.
     const raw = evt.pressure;
-    if (evt.pointerType === 'pen') return Math.min(1, Math.max(raw || 0.5, 0.3));
+    if (evt.pointerType === 'pen') {
+      const p = Math.min(1, Math.max(raw || 0.5, 0.3));
+      // Apply the user's sensitivity multiplier: 0 = uniform, 1 = natural, 2 = exaggerated.
+      return Math.min(1, Math.max(p * state.pressureSensitivity, 0.1));
+    }
     return raw || 0.5;
   }
 
@@ -546,28 +559,89 @@
     try { localStorage.setItem('oj-theme', t); } catch (_) {}
     $('theme-btn').innerHTML = t === 'light' ? ICON_MOON : ICON_SUN;
   }
-  $('theme-btn').onclick = () => applyTheme(document.body.dataset.theme === 'light' ? 'dark' : 'light');
 
-  /* Settings: one place for the preferences that used to be scattered
-     across toolbar toggles and hidden in localStorage. */
-  $('settings-btn').onclick = async () => {
+  /* Settings panel: theme, pen pressure, updates, pen log, storage location.
+     Opens as its own view from the home bar. */
+  function openSettings() {
+    $('home-view').hidden = true; $('editor-view').hidden = true;
+    $('settings-view').hidden = false;
+    const ev = $('settings-view');
+    ev.classList.remove('view-enter'); void ev.offsetWidth; ev.classList.add('view-enter');
+    renderSettings();
+  }
+  function goHomeFromSettings() {
+    $('settings-view').hidden = true; $('home-view').hidden = false;
+    const hv = $('home-view');
+    hv.classList.remove('view-enter'); void hv.offsetWidth; hv.classList.add('view-enter');
+    renderHome($('search').value);
+  }
+  $('settings-back').onclick = goHomeFromSettings;
+
+  function renderSettings() {
     const dark = document.body.dataset.theme === 'dark';
-    const theme = await modal({
-      title: 'Settings',
-      body: 'Theme: ' + (dark ? 'dark' : 'light') + '\nInk colour: ' + state.color +
-        '\nPen style: ' + state.penStyle + '\nRuled pages: ' + (state.ruled ? 'on' : 'off') +
-        '\nZoom: ' + Math.round(state.zoom * 100) + '%',
-      okText: 'Close',
-    });
-    void theme;
-    toast('Preferences live in the toolbar and are remembered automatically');
+    $('theme-dark').checked = dark;
+    $('pressure-enabled').checked = state.pressureEnabled;
+    $('pressure-sensitivity').value = state.pressureSensitivity;
+    $('pressure-value').textContent = Math.round(state.pressureSensitivity * 100) + '%';
+    $('penlog-info').textContent = state.penLog.length + ' pen events captured this session.';
+    $('update-status').textContent = '';
+    if (Backend) {
+      Backend.library_path_get().then((p) => {
+        $('library-path').textContent = 'Library: ' + p;
+      }).catch(() => {
+        $('library-path').textContent = 'Library: (could not read path)';
+      });
+    } else {
+      $('library-path').textContent = 'Library: (no backend)';
+    }
+  }
+
+  $('pressure-enabled').onchange = (e) => { state.pressureEnabled = e.target.checked; };
+  $('pressure-sensitivity').oninput = (e) => {
+    state.pressureSensitivity = Number(e.target.value);
+    $('pressure-value').textContent = Math.round(state.pressureSensitivity * 100) + '%';
   };
-  $('penlog-btn').onclick = async () => {
+
+  $('theme-dark').onchange = (e) => { applyTheme(e.target.checked ? 'dark' : 'light'); };
+
+  $('penlog-copy').onclick = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(state.penLog));
       toast(`Pen log copied (${state.penLog.length} events)`);
     } catch (err) { toast('Copy failed: ' + err.message); }
   };
+
+  $('update-check').onclick = async () => {
+    if (!Backend) { toast('No backend bridge'); return; }
+    $('update-status').textContent = 'Checking…';
+    try {
+      const info = await Backend.updateCheck ? Backend.updateCheck() : null;
+      if (info && info.update) {
+        $('update-status').textContent = `Update available: ${info.latest} (you have ${info.current}). Click to download.`;
+        $('update-check').textContent = 'Download update';
+        $('update-check').onclick = async () => {
+          try {
+            await Backend.downloadUpdate(info.url);
+            toast('Update downloaded. Run the installer to apply.');
+          } catch (err) { toast('Download failed: ' + err.message); }
+        };
+      } else {
+        $('update-status').textContent = 'You are on the latest version.';
+      }
+    } catch (err) { $('update-status').textContent = 'Update check failed: ' + err.message; }
+  };
+
+  $('library-change').onclick = async () => {
+    if (!Backend) { toast('No backend bridge'); return; }
+    toast('Pick the folder to store .ejourney library files.');
+    // Handled by the backend: user picks a folder, we store the path.
+    // For now, open the containing folder so the user can see where it lives.
+    try {
+      await Backend.openLibraryFolder ? Backend.openLibraryFolder() : null;
+    } catch (err) { toast('Could not open folder: ' + err.message); }
+  };
+
+  $('settings-btn').onclick = openSettings;
 
   function addPage() {
     const nb = notebook(); if (!nb) return null;
@@ -863,30 +937,109 @@
     for (const id of state.canvases.keys()) redrawPage(id);
   };
 
-  /* ---------- page export ---------- */
-  $('export-page-btn').onclick = async () => {
-    if (!Backend) { toast('No backend bridge'); return; }
-    const nb = notebook();
-    const pg = nb && mostVisiblePage();
-    if (!pg) { toast('No page to export'); return; }
-    const safe = (nb.name || 'notebook').replace(/[\\/:*?"<>|]/g, '-');
-    try {
-      toast('Rendering page…');
-      await exportPagePng(pg, 2);
-      void safe;
-      toast('Saved PNG');
-    } catch (err) { toast('Export failed: ' + err.message); }
-  };
-  $('export-pdf-btn').onclick = async () => {
-    if (!Backend) { toast('No backend bridge'); return; }
+  /* ---------- export popup ---------- */
+  // Single export entry point: choose scope (page / range / notebook) and
+  // format (PNG / PDF). PNG + multi-page warns that each page exports separately.
+  async function showExportPopup() {
     const nb = notebook();
     if (!nb || !nb.pages.length) { toast('Nothing to export'); return; }
-    try {
-      toast(`Rendering ${nb.pages.length} page${nb.pages.length === 1 ? '' : 's'}…`);
-      await exportPagesPdf(nb.pages, 2);
-      toast('Saved PDF');
-    } catch (err) { toast('Export failed: ' + err.message); }
-  };
+    const body = document.createElement('div');
+    body.style.display = 'flex'; body.style.flexDirection = 'column'; body.style.gap = '0.75rem'; body.style.width = '17rem';
+
+    const scopeBox = document.createElement('fieldset');
+    scopeBox.style.border = '1px solid var(--panel-border)'; scopeBox.style.borderRadius = '0.375rem'; scopeBox.style.padding = '0.5rem'; scopeBox.style.margin = '0';
+    const legend = document.createElement('legend'); legend.textContent = 'Scope'; legend.style.fontSize = '0.8rem'; legend.style.color = 'var(--ink-soft)';
+    const opts = [
+      ['single', 'Single page', 'Export the currently visible page only.'],
+      ['range', 'Multi-page', 'Choose a start and end page with a slider.'],
+      ['full', 'Full notebook', 'Export every page in the notebook.'],
+    ];
+    const radios = [];
+    for (const [val, label, desc] of opts) {
+      const row = document.createElement('label'); row.style.display = 'block'; row.style.marginBottom = '0.375rem'; row.style.fontSize = '0.875rem';
+      const rb = document.createElement('input'); rb.type = 'radio'; rb.name = 'export-scope'; rb.value = val; rb.style.marginRight = '0.5rem';
+      if (val === 'single') rb.checked = true;
+      const span = document.createElement('span'); span.textContent = label;
+      const d = document.createElement('div'); d.textContent = desc; d.style.fontSize = '0.75rem'; d.style.color = 'var(--ink-soft)'; d.style.marginLeft = '1.5rem';
+      row.append(rb, span, d); scopeBox.appendChild(row); radios.push(rb);
+    }
+    scopeBox.insertBefore(legend, scopeBox.firstChild);
+
+    // Page range slider (shown only for 'range' scope)
+    const rangeBox = document.createElement('div'); rangeBox.hidden = true; rangeBox.style.display = 'flex'; rangeBox.style.flexDirection = 'column'; rangeBox.style.gap = '0.5rem';
+    const rangeLabel = document.createElement('label'); rangeLabel.textContent = 'Pages'; rangeLabel.style.fontSize = '0.875rem';
+    const slider = document.createElement('input'); slider.type = 'range'; slider.min = '1'; slider.max = String(nb.pages.length); slider.value = '1'; slider.style.flex = '1';
+    const rangeVal = document.createElement('span'); rangeVal.textContent = '1'; rangeVal.style.fontVariantNumeric = 'tabular-nums'; rangeVal.style.fontSize = '0.875rem';
+    slider.oninput = () => { rangeVal.textContent = slider.value; };
+    rangeBox.append(rangeLabel, slider, rangeVal);
+
+    // Format
+    const fmtBox = document.createElement('fieldset');
+    fmtBox.style.border = '1px solid var(--panel-border)'; fmtBox.style.borderRadius = '0.375rem'; fmtBox.style.padding = '0.5rem'; fmtBox.style.margin = '0';
+    const fl = document.createElement('legend'); fl.textContent = 'Format'; fl.style.fontSize = '0.8rem'; fl.style.color = 'var(--ink-soft)';
+    const pngRb = document.createElement('input'); pngRb.type = 'radio'; pngRb.name = 'export-fmt'; pngRb.value = 'png'; pngRb.checked = true;
+    const pdfRb = document.createElement('input'); pdfRb.type = 'radio'; pdfRb.name = 'export-fmt'; pdfRb.value = 'pdf';
+    const fmtRows = [
+      [pngRb, 'PNG', 'Each page becomes a separate .png file.'],
+      [pdfRb, 'PDF', 'All pages combined into one .pdf file.'],
+    ];
+    for (const [rb, label, desc] of fmtRows) {
+      const row = document.createElement('label'); row.style.display = 'block'; row.style.marginBottom = '0.375rem'; row.style.fontSize = '0.875rem';
+      const span = document.createElement('span'); span.textContent = label;
+      const d = document.createElement('div'); d.textContent = desc; d.style.fontSize = '0.75rem'; d.style.color = 'var(--ink-soft)'; d.style.marginLeft = '1.5rem';
+      row.append(rb, span, d); fmtBox.appendChild(row);
+    }
+    fmtBox.insertBefore(fl, fmtBox.firstChild);
+
+    // Warning for PNG + multi/full
+    const warn = document.createElement('div'); warn.hidden = true; warn.style.color = '#c42b2b'; warn.style.fontSize = '0.75rem'; warn.style.marginTop = '0.25rem';
+    warn.textContent = 'Note: PNG + multiple pages exports each page as a separate file.';
+
+    function updateUI() {
+      const scope = radios.find((r) => r.checked).value;
+      rangeBox.hidden = scope !== 'range';
+      const multi = scope !== 'single';
+      const isPng = pngRb.checked;
+      warn.hidden = !(multi && isPng);
+    }
+    radios.forEach((r) => { r.onchange = updateUI; });
+    pngRb.onchange = updateUI;
+    pdfRb.onchange = updateUI;
+    updateUI();
+
+    body.append(scopeBox, rangeBox, fmtBox, warn);
+
+    const ok = async () => {
+      const scope = radios.find((r) => r.checked).value;
+      const fmt = pngRb.checked ? 'png' : 'pdf';
+      const start = scope === 'range' ? Math.max(1, Math.min(Number(slider.value), nb.pages.length)) : 1;
+      const end = scope === 'range' ? start : (scope === 'full' ? nb.pages.length : 1);
+      const pgs = nb.pages.slice(start - 1, end);
+
+      if (fmt === 'png' && pgs.length > 1) {
+        // Export each page separately
+        let done = 0;
+        for (const pg of pgs) {
+          try {
+            await exportPagePng(pg, 2);
+            done++;
+            toast(`Exported ${done}/${pgs.length} pages…`);
+          } catch (err) { toast('Export failed on page ' + (pg.order || 0) + 1 + ': ' + err.message); return; }
+        }
+        toast(`Exported ${done} page${done === 1 ? '' : 's'} as PNG`);
+      } else if (fmt === 'png') {
+        await exportPagePng(pgs[0], 2);
+        toast('Saved PNG');
+      } else {
+        await exportPagesPdf(pgs, 2);
+        toast('Saved PDF');
+      }
+    };
+
+    await modal({ title: 'Export', body, okText: 'Export', cancelText: 'Cancel', ok });
+  }
+
+  $('export-btn').onclick = showExportPopup;
 
   /* zoom */
   function setZoom(z, keepRatio = true) {
@@ -1131,7 +1284,7 @@
 
   /* ================= boot ================= */
   (async () => {
-    $('ver').textContent = 'v0.11 beta';
+    $('ver').textContent = 'v0.12 beta';
     let theme = 'light';
     try { theme = localStorage.getItem('oj-theme') || 'light'; } catch (_) {}
     applyTheme(theme);

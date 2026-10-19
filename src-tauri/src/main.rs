@@ -9,6 +9,7 @@
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 
@@ -407,6 +408,89 @@ fn util_sqlwasm() -> Vec<u8> {
     include_bytes!("../../renderer/vendor/sql-wasm.wasm").to_vec()
 }
 
+/// Check GitHub for a newer release than the current version.
+#[tauri::command]
+fn update_check() -> Result<Value, String> {
+    let current = env!("CARGO_PKG_VERSION");
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("E-Journal updater")
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get("https://api.github.com/repos/EkarinLB/e-journal/releases/latest")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Ok(serde_json::json!({ "update": false, "current": current }));
+    }
+    let release: Value = resp.json().map_err(|e| e.to_string())?;
+    let latest = release.get("tag_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim_start_matches('v');
+    let url = release.get("assets")
+        .and_then(|a| a.as_array())
+        .and_then(|arr| arr.iter()
+            .find_map(|a| {
+                a.get("name").and_then(|n| n.as_str())
+                    .and_then(|n| {
+                        if n.contains("setup.exe") || n.contains(".msi") || n.contains(".deb") || n.contains(".AppImage") {
+                            a.get("browser_download_url").and_then(|u| u.as_str()).map(|s| s.to_string())
+                        } else { None }
+                    }
+                )
+            }))
+        .unwrap_or_default();
+    Ok(serde_json::json!({
+        "update": latest != current,
+        "current": current,
+        "latest": latest,
+        "url": url,
+    }))
+}
+
+/// Download an update file to the user's Downloads folder.
+#[tauri::command]
+fn download_update(url: String) -> Result<String, String> {
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("E-Journal updater")
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().map_err(|e| e.to_string())?;
+    let mut bytes = resp.bytes().map_err(|e| e.to_string())?;
+    let downloads = dirs::download_dir()
+        .ok_or("Could not locate Downloads folder")?;
+    let name = url.split('/').next_back().unwrap_or("update");
+    let out = downloads.join(name);
+    fs::write(&out, &mut bytes).map_err(|e| e.to_string())?;
+    Ok(out.to_string_lossy().to_string())
+}
+
+/// Open the folder containing the library file in the system file explorer.
+#[tauri::command]
+fn open_library_folder(app: AppHandle) -> Result<(), String> {
+    let path = library_path(&app)?;
+    let dir = path.parent().ok_or("No parent directory")?;
+    if cfg!(target_os = "windows") {
+        Command::new("explorer").arg(dir).spawn().map_err(|e| e.to_string())?;
+    } else if cfg!(target_os = "linux") {
+        Command::new("xdg-open").arg(dir).spawn().map_err(|e| e.to_string())?;
+    } else {
+        return Err("Opening folders is not supported on this platform".into());
+    }
+    Ok(())
+}
+
+/// Return the canonical library path so the UI can display it.
+#[tauri::command]
+fn library_path_get() -> Result<String, String> {
+    let dir = canonical_dir()?;
+    Ok(dir.join(LIBRARY_FILE).to_string_lossy().to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         // A second instance would hold a stale in-memory library and could
@@ -427,6 +511,10 @@ fn main() {
             media_pick_image,
             media_pick_files,
             file_save,
+            update_check,
+            download_update,
+            open_library_folder,
+            library_path_get,
             util_sqlwasm
         ])
         .run(tauri::generate_context!())
