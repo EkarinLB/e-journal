@@ -485,10 +485,11 @@
       invalidateInk(pg.id);
       state.undoStack.push({ pageId: pg.id, strokeId: d.stroke.id, stroke: d.stroke });
       state.redoStack = [];
-      // A finished stroke is a discrete user action, so it is written to disk
-      // at once. Debouncing here would lose the last strokes of a session if
-      // the window closed within the debounce window.
-      saveNow(); redrawPage(pg.id);
+      // Writing the whole library after every stroke is O(library) per
+      // stroke, which is why writing got slower as a notebook grew. The flush
+      // installed on pagehide/beforeunload guarantees a pending stroke is
+      // still persisted when the window closes, so a short debounce is safe.
+      scheduleSave(); redrawPage(pg.id);
     };
     canvas.addEventListener('pointerup', (evt) => { logPen('up', evt); finish(evt); });
     canvas.addEventListener('pointercancel', (evt) => { logPen('cancel', evt); finish(evt); }); // keep partial ink, never drop it
