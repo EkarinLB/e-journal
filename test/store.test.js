@@ -69,4 +69,23 @@ assert.strictEqual(bak.notebooks.length, 1, 'backup should hold the previous sta
 assert.strictEqual(bak.notebooks[0].name, 'Physics');
 fs.rmSync(dir6, { recursive: true, force: true });
 
-console.log('store.test.js: all 6 checks passed');
+// 7. An interrupted write leaves a zero-length file. Loading must yield an
+//    empty library, not throw — otherwise the app cannot start at all.
+{
+  const p = path.join(dir, 'interrupted.json');
+  fs.writeFileSync(p, '');
+  const recovered = new LibraryStore(p).load();
+  assert.deepStrictEqual(recovered, { notebooks: [] }, 'zero-length file must load empty');
+  // whitespace-only is the same failure mode
+  const p2 = path.join(dir, 'blank.json');
+  fs.writeFileSync(p2, '   \n\t ');
+  assert.deepStrictEqual(new LibraryStore(p2).load(), { notebooks: [] });
+}
+
+// 8. A fresh profile has no file at all and must still start.
+{
+  const p = path.join(dir, 'never-saved.json');
+  assert.deepStrictEqual(new LibraryStore(p).load(), { notebooks: [] });
+}
+
+console.log('store.test.js: all 8 checks passed');
