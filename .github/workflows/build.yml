@@ -7,9 +7,17 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Enables the flatpak job to attach its artifact to a tagged release.
+# Enables the release to create/update the draft release the artifacts attach to.
 permissions:
   contents: write
+
+# Never let runs pile up. Without this, every push queues another full
+# build and they compete for runners until nothing can start -- which is
+# exactly what happened and left the release build queued for 20+ minutes.
+# Superseded runs are cancelled automatically; tag builds are left alone.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   # The native Rust rewrite: the real product. Verified on both target
