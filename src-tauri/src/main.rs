@@ -84,6 +84,31 @@ fn migrate_legacy(app: &AppHandle, canonical: &std::path::Path) -> Result<Option
     if notebook_count(canonical) > 0 {
         return Ok(None);
     }
+    // An existing-but-empty canonical file means the user deliberately has no
+    // notebooks. Migrating here would resurrect notes they just deleted, so a
+    // migration only runs when the canonical file is genuinely absent or
+    // unusable (zero length / unreadable).
+    if canonical.exists() {
+        let readable = fs::read_to_string(canonical)
+            .map(|t| !t.trim().is_empty() && serde_json::from_str::<Value>(&t).is_ok())
+            .unwrap_or(false);
+        if readable {
+            return Ok(None);
+        }
+        // Unusable: try the rolling backup before falling back to migration.
+        let bak = canonical.with_extension("json.bak");
+        if notebook_count(&bak) > 0 {
+            let text = fs::read_to_string(&bak).map_err(|e| e.to_string())?;
+            if serde_json::from_str::<Value>(&text).is_ok() {
+                fs::write(canonical, &text).map_err(|e| e.to_string())?;
+                return Ok(Some(format!(
+                    "Recovered {} notebooks from backup",
+                    notebook_count(&bak)
+                )));
+            }
+        }
+        return Ok(None);
+    }
     for legacy in legacy_paths(app) {
         if legacy == canonical || !legacy.exists() {
             continue;
@@ -469,6 +494,25 @@ mod tests {
         );
         // The current canonical location must never be treated as a source.
         assert!(!cands.contains(&base.join("E-Journal").join(LIBRARY_FILE)));
+    }
+
+    #[test]
+    fn a_deliberately_empty_library_is_not_migrated_over() {
+        // Regression: if the user deletes every notebook, the canonical file is
+        // a valid but empty library. Treating "empty" as "needs migration"
+        // silently resurrects notes they deleted.
+        let dir = std::env::temp_dir().join(format!("oj-no-resurrect-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let canonical = dir.join("e-journal-library.json");
+        // A real, parseable, deliberately empty library.
+        fs::write(&canonical, r#"{"version":1,"notebooks":[]}"#).unwrap();
+        assert_eq!(notebook_count(&canonical), 0);
+        // The guard that must hold: readable-but-empty means "leave it alone".
+        let text = fs::read_to_string(&canonical).unwrap();
+        let readable = !text.trim().is_empty() && serde_json::from_str::<Value>(&text).is_ok();
+        assert!(readable, "an empty-but-valid library must read as intentional");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
