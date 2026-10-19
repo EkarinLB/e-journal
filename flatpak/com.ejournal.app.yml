@@ -54,12 +54,23 @@ modules:
       - /app/include
       - /app/share/doc
       - /app/share/man
-      - /app/share/man/man1/node.1.gz
+      - /app/share/man/man1
+      - /app/lib/node_modules/npm/docs
+      - /app/lib/node_modules/npm/test
+      - /app/lib/node_modules/corepack/dist/lib
+      - /app/bin/corepack
 
   - name: e-journal
     buildsystem: simple
     build-commands:
-      - npm install --no-audit --no-fund
+      # Keep npm's cache and config inside /app. Outside it they live under
+      # $HOME, which does not exist in the build sandbox, and npm aborts with
+      # the unhelpful "Exit handler never called!".
+      - export npm_config_cache=/app/.npm-cache
+      - export npm_config_update_notifier=false
+      - export npm_config_fund=false
+      - export npm_config_audit=false
+      - npm install --no-audit --no-fund --cache /app/.npm-cache
       # Build the Linux executable only; packaging (.deb) is pointless here.
       - npx tauri build --no-bundle
       # The app binary itself is what Flatpak runs — without this step the
