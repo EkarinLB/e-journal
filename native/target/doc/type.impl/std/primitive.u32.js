@@ -1,0 +1,9 @@
+(function() {
+    var type_impls = Object.fromEntries([["winit",[["<details class=\"toggle implementors-toggle\" open><summary><section id=\"impl-Pixel-for-u32\" class=\"impl\"><a href=\"#impl-Pixel-for-u32\" class=\"anchor\">§</a><h3 class=\"code-header\">impl <a class=\"trait\" href=\"winit/dpi/trait.Pixel.html\" title=\"trait winit::dpi::Pixel\">Pixel</a> for <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.99.0/std/primitive.u32.html\">u32</a></h3></section></summary><div class=\"impl-items\"><section id=\"method.from_f64\" class=\"method trait-impl\"><a href=\"#method.from_f64\" class=\"anchor\">§</a><h4 class=\"code-header\">fn <a href=\"winit/dpi/trait.Pixel.html#tymethod.from_f64\" class=\"fn\">from_f64</a>(f: <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.99.0/std/primitive.f64.html\">f64</a>) -&gt; <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.99.0/std/primitive.u32.html\">u32</a></h4></section><section id=\"method.cast\" class=\"method trait-impl\"><a href=\"#method.cast\" class=\"anchor\">§</a><h4 class=\"code-header\">fn <a href=\"winit/dpi/trait.Pixel.html#method.cast\" class=\"fn\">cast</a>&lt;P&gt;(self) -&gt; P<div class=\"where\">where\n    P: <a class=\"trait\" href=\"winit/dpi/trait.Pixel.html\" title=\"trait winit::dpi::Pixel\">Pixel</a>,</div></h4></section></div></details>","Pixel","winit::event::AxisId","winit::event::ButtonId"]]]]);
+    if (window.register_type_impls) {
+        window.register_type_impls(type_impls);
+    } else {
+        window.pending_type_impls = type_impls;
+    }
+})()
+//{"start":55,"fragment_lengths":[1356]}
