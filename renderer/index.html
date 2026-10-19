@@ -14,10 +14,11 @@
       <div class="brand">E-Journal <small id="ver"></small></div>
       <input id="search" type="search" placeholder="Search notebooks…" aria-label="Search notebooks">
       <div class="spacer"></div>
-      <button id="import-btn" title="Import .E-Journal file">Import</button>
-      <button id="import-ink-btn" title="Import Microsoft Journal .ink files (read-only)">Import .ink</button>
+      <button id="import-btn" title="Import E-Journal libraries and Microsoft Journal .ink files">Import</button>
+      <input id="import-any-file" type="file" accept=".ejournal,.json,.ink" multiple hidden>
       <input id="ink-file" type="file" accept=".ink" multiple hidden>
       <button id="export-btn" title="Export library to .E-Journal">Export</button>
+      <button id="settings-btn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.6 1.6 0 008 19.4a1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H2a2 2 0 110-4h.1A1.6 1.6 0 004.6 8a1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V2a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H22a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg></button>
       <button id="add-notebook" class="primary">+ New</button>
     </header>
     <div id="nb-grid"></div>
@@ -27,7 +28,7 @@
   <section id="editor-view" hidden>
     <div id="topbar">
       <button id="back-btn" title="Back to notebooks" aria-label="Back to notebooks"><svg viewBox="0 0 24 24"><path d="M19 12H5m6-7l-7 7 7 7"/></svg></button>
-      <strong id="nb-name"></strong>
+      <strong id="nb-name" title="Click to rename" tabindex="0" role="button"></strong>
       <div class="spacer"></div>
       <div id="pagedock" role="group" aria-label="Pages">
         <button id="pg-prev" title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></svg></button>
@@ -41,6 +42,8 @@
       <button id="zoom-in" title="Zoom in (Ctrl++)" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
       <button id="zoom-fit" title="Fit width" aria-label="Fit width"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       <button id="lines-btn" class="toggle active" title="Ruled lines" aria-label="Ruled lines"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h10"/></svg></button>
+      <button id="export-page-btn" title="Export this page as PNG" aria-label="Export page as PNG"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg></button>
+      <button id="export-pdf-btn" title="Export notebook as PDF" aria-label="Export notebook as PDF"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></button>
       <button id="theme-btn" title="Toggle light/dark" aria-label="Toggle light/dark"></button>
       <button id="penlog-btn" title="Copy pen event log for diagnostics" aria-label="Copy pen event log"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg></button>
       <button id="hide-btn" title="Hide interface (H)" aria-label="Hide interface"><svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6c2 0 3.7.7 5.1 1.7M21 12s-3.5 6-9 6c-2 0-3.7-.7-5.1-1.7"/><path d="M4 4l16 16"/></svg></button>

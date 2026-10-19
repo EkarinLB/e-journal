@@ -8,10 +8,14 @@
 
 use serde_json::Value;
 use std::fs;
+use std::path::Path;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 const MAX_IMAGE_BYTES: u64 = 12 * 1024 * 1024;
+/// Import files (notebooks, .ink) are larger than images in practice.
+const MAX_IMPORT_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_IMPORT_BYTES_LABEL: &str = "512 MB";
 const LIBRARY_FILE: &str = "e-journal-library.json";
 
 /// Canonical, product-named data folder: %APPDATA%\E-Journal
@@ -59,7 +63,7 @@ fn legacy_paths(app: &AppHandle) -> Vec<std::path::PathBuf> {
     legacy_candidates(&base, app_data.as_deref())
 }
 
-fn library_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+fn library_path(_app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(canonical_dir()?.join(LIBRARY_FILE))
 }
 
@@ -270,6 +274,70 @@ fn mime_for(ext: &str) -> &str {
     }
 }
 
+/// A file chosen for import: E-Journal libraries and Microsoft Journal .ink
+/// documents come through this single picker, so the UI needs one button.
+#[derive(serde::Serialize)]
+struct PickedFile {
+    name: String,
+    /// Raw bytes; the renderer decides how to interpret them by extension.
+    bytes: Vec<u8>,
+}
+
+#[tauri::command]
+fn media_pick_files(app: AppHandle) -> Result<Vec<PickedFile>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter(
+            "Supported files",
+            &["ejournal", "json", "ink"],
+        )
+        .blocking_pick_files();
+    let Some(paths) = picked else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for p in paths {
+        let fs_path = p.into_path().map_err(|e| e.to_string())?;
+        let len = fs::metadata(&fs_path).map_err(|e| e.to_string())?.len();
+        if len > MAX_IMPORT_BYTES {
+            return Err(format!("{} is too large to import", MAX_IMPORT_BYTES_LABEL));
+        }
+        let bytes = fs::read(&fs_path).map_err(|e| e.to_string())?;
+        let name = fs_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("import")
+            .to_string();
+        out.push(PickedFile { name, bytes });
+    }
+    Ok(out)
+}
+
+/// Write exported bytes (PNG page, PDF notebook) to a user-chosen path.
+#[tauri::command]
+fn file_save(app: AppHandle, name: String, bytes: Vec<u8>) -> Result<bool, String> {
+    let ext = Path::new(&name)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    let Some(path) = app
+        .dialog()
+        .file()
+        .set_file_name(&name)
+        .add_filter("PNG image", &["png"])
+        .add_filter("PDF document", &["pdf"])
+        .blocking_save_file()
+        .and_then(|p| p.into_path().ok())
+    else {
+        return Ok(false); // user cancelled
+    };
+    let _ = ext;
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
 #[tauri::command]
 fn media_pick_image(app: AppHandle) -> Result<Option<PickedImage>, String> {
     let picked = app
@@ -326,6 +394,8 @@ fn main() {
             library_export,
             library_import,
             media_pick_image,
+            media_pick_files,
+            file_save,
             util_sqlwasm
         ])
         .run(tauri::generate_context!())

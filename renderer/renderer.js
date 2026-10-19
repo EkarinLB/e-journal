@@ -20,6 +20,8 @@
         exportLibrary: (library) => invoke('library_export', { library }),
         importLibrary: () => invoke('library_import'),
         pickImage: () => invoke('media_pick_image'),
+        pickFiles: () => invoke('media_pick_files'),
+        saveFile: (name, bytes) => invoke('file_save', { name, bytes }),
         sqlWasmBinary: () => invoke('util_sqlwasm').then((a) => new Uint8Array(a)),
       };
     }
@@ -389,11 +391,7 @@
       const pg = nb ? nb.pages.find((p) => p.id === pageId) : null;
       if (!pg) return;
       const pos = canvasPos(canvas, evt);
-      if (state.tool === 'eraser') {
-        if (state.drawing && state.drawing.pointerType === 'pen') return; // never erase under an active pen
-        if (eraseAt(pg, pos) > 0) { scheduleSave(); redrawPage(pageId); }
-        return;
-      }
+      if (state.tool === 'eraser') return; // handled during pointermove so a drag erases
       if (state.tool === 'select') {
         const hit = [...(pg.images || [])].reverse().find((im) =>
           pos.x >= im.x && pos.x <= im.x + im.w && pos.y >= im.y && pos.y <= im.y + im.h);
@@ -421,6 +419,29 @@
             im.x = Math.min(Math.max(pos.x - state.dragImg.dx, -im.w + 40), PAGE_W - 40);
             im.y = Math.min(Math.max(pos.y - state.dragImg.dy, -im.h + 40), PAGE_H - 40);
             redrawPage(pg.id);
+          }
+        }
+        return;
+      }
+      // Eraser: drag to erase continuously. It used to fire only on
+      // pointerdown, so a single swipe erased one stroke and you had to
+      // keep tapping.
+      if (state.tool === 'eraser' && !state.drawing && !state.dragImg) {
+        const enb = notebook();
+        const epg = enb ? enb.pages.find((p) => p.id === pageId) : null;
+        if (epg) {
+          let removed = 0;
+          for (const e of evt.getCoalescedEvents ? evt.getCoalescedEvents() : [evt]) {
+            removed += eraseAt(epg, canvasPos(canvas, e));
+          }
+          if (removed > 0) {
+            const last = state.undoStack[state.undoStack.length - 1];
+            if (!last || last.pageId !== epg.id || last.kind !== 'erase') {
+              state.undoStack.push({ pageId: epg.id, kind: 'erase', before: epg.strokes });
+              state.redoStack = [];
+            }
+            saveNow();
+            schedulePaint(pageId);
           }
         }
         return;
@@ -594,6 +615,29 @@
       s.textContent = `${nb.pages.length} page${nb.pages.length === 1 ? '' : 's'}`;
       const del = document.createElement('button');
       del.className = 'del'; del.innerHTML = ICON_X; del.title = 'Delete notebook'; del.setAttribute('aria-label', 'Delete notebook');
+
+      // Rename: click the title, or use the card's rename button. Keyboard
+      // reachable and discoverable rather than hidden in a context menu.
+      const doRename = async (e) => {
+        if (e) e.stopPropagation();
+        const name = await modal({
+          title: 'Rename notebook', input: true, value: nb.name, okText: 'Rename',
+        });
+        if (name === null) return;
+        const clean = String(name).trim();
+        if (!clean || clean === nb.name) return;
+        nb.name = clean;
+        nb.updatedAt = new Date().toISOString();
+        await saveNow();
+        renderHome($('search').value);
+        toast(`Renamed to "${clean}"`);
+      };
+      h.className = 'nb-title';
+      h.title = 'Rename notebook';
+      h.tabIndex = 0;
+      h.setAttribute('role', 'button');
+      h.onclick = doRename;
+      h.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); doRename(); } };
       del.onclick = async (e) => {
         e.stopPropagation();
         if (await modalConfirm(`Delete "${nb.name}"?`, 'The notebook and all its pages will be removed.', 'Delete')) {
@@ -786,6 +830,31 @@
     for (const id of state.canvases.keys()) redrawPage(id);
   };
 
+  /* ---------- page export ---------- */
+  $('export-page-btn').onclick = async () => {
+    if (!Backend) { toast('No backend bridge'); return; }
+    const nb = notebook();
+    const pg = nb && mostVisiblePage();
+    if (!pg) { toast('No page to export'); return; }
+    const safe = (nb.name || 'notebook').replace(/[\\/:*?"<>|]/g, '-');
+    try {
+      toast('Rendering page…');
+      await exportPagePng(pg, 2);
+      void safe;
+      toast('Saved PNG');
+    } catch (err) { toast('Export failed: ' + err.message); }
+  };
+  $('export-pdf-btn').onclick = async () => {
+    if (!Backend) { toast('No backend bridge'); return; }
+    const nb = notebook();
+    if (!nb || !nb.pages.length) { toast('Nothing to export'); return; }
+    try {
+      toast(`Rendering ${nb.pages.length} page${nb.pages.length === 1 ? '' : 's'}…`);
+      await exportPagesPdf(nb.pages, 2);
+      toast('Saved PDF');
+    } catch (err) { toast('Export failed: ' + err.message); }
+  };
+
   /* zoom */
   function setZoom(z, keepRatio = true) {
     const zone = $('pages');
@@ -875,39 +944,155 @@
       toast(`Could not import ${name}: ${err.message}`);
     }
   }
-  $('import-ink-btn').onclick = async () => {
-    if (!Backend) { toast('No backend bridge'); return; }
-    // Prefer the main-process picker (always works); the hidden file
-    // input is a fallback for hosts without it.
-    if (Backend.pickInk) {
-      try {
-        const files = await Backend.pickInk();
-        for (const f of files || []) await importPickedInk(f.bytes, f.name);
-      } catch (err) { toast('Pick failed: ' + err.message); }
-      return;
+  /* ---------- export: PNG / PDF ----------
+     The page is already fully rendered on its canvas, so exporting reuses
+     that rather than reimplementing layout. */
+  function pageToCanvas(pg, scale) {
+    const c = document.createElement('canvas');
+    c.width = Math.round(PAGE_W * scale);
+    c.height = Math.round(PAGE_H * scale);
+    const ctx = c.getContext('2d');
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = '#f7f3ea';
+    ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+    if (pg.ruled !== false) drawRuled(ctx);
+    for (const st of pg.strokes || []) drawStrokeOn(ctx, st);
+    for (const im of pg.images || []) {
+      const el = state.imgCache.get(im.id);
+      if (el && el.complete && el.naturalWidth > 0) ctx.drawImage(el, im.x, im.y, im.w, im.h);
     }
-    $('ink-file').click();
-  };
-  $('ink-file').onchange = async (e) => {
+    return c;
+  }
+
+  async function exportPagePng(pg, scale) {
+    const c = pageToCanvas(pg, scale);
+    const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('could not encode PNG');
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    await Backend.saveFile(`page-${(pg.order || 0) + 1}.png`, [...buf]);
+  }
+
+  /* PDF is assembled by hand rather than pulling in a library: a single
+     page of PNG data is a few dozen lines and avoids ~1 MB of
+     dependency for one feature. Each page becomes one image XObject. */
+  async function buildPdf(pgs, scale) {
+    const enc = new TextEncoder();
+    const latin = new TextDecoder('latin1');
+    // Object bodies are collected first so /Kids and byte offsets are exact.
+    const bodies = [];
+    const pageObjNo = [];
+    for (let i = 0; i < pgs.length; i++) {
+      const c = pageToCanvas(pgs[i], scale);
+      const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+      const png = new Uint8Array(await blob.arrayBuffer());
+      const content = `q\n${(612 / c.width).toFixed(4)} 0 0 ${(792 / c.height).toFixed(4)} 0 0 cm\n/Im0 Do\nQ\n`;
+      pageObjNo.push(bodies.length + 3); // image, content, page objects follow
+      bodies.push({
+        str: `<< /Type /XObject /Subtype /Image /Width ${c.width} /Height ${c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length ${png.length} >>`,
+        bin: png,
+      });
+      bodies.push({ str: `<< /Length ${content.length} >>`, bin: enc.encode(content) });
+      bodies.push({
+        str: null, // page object needs its own object numbers, filled below
+      });
+    }
+    // Page objects reference their own image+content pair.
+    const catalogNo = 1, pagesNo = 2;
+    for (let i = 0; i < pgs.length; i++) {
+      const base = pageObjNo[i];
+      bodies[base - 3 + 2].str =
+        `<< /Type /Page /Parent ${pagesNo} 0 R /MediaBox [0 0 612 792] ` +
+        `/Resources << /XObject << /Im0 ${base} 0 R >> >> /Contents ${base + 1} 0 R >>`;
+    }
+    const kids = pageObjNo.map((n) => `${n + 2} 0 R`).join(' ');
+    bodies.unshift({ str: `<< /Type /Catalog /Pages ${pagesNo} 0 R >>` });          // 1
+    bodies.splice(1, 0, { str: `<< /Type /Pages /Kids [${kids}] /Count ${pgs.length} >>` }); // 2
+
+    const parts = [];
+    let offset = 0;
+    const put = (b) => { parts.push(b); offset += b.length; };
+    put(enc.encode('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'));
+    const xref = [];
+    for (let i = 0; i < bodies.length; i++) {
+      xref.push(offset);
+      const o = bodies[i];
+      put(enc.encode(`${i + 1} 0 obj\n${o.str}\n`));
+      if (o.bin) {
+        put(enc.encode('stream\n'));
+        put(o.bin);
+        put(enc.encode('\nendstream\n'));
+      }
+      put(enc.encode('endobj\n'));
+    }
+    const startxref = offset;
+    let x = `xref\n0 ${bodies.length + 1}\n0000000000 65535 f \n`;
+    for (const off of xref) x += String(off).padStart(10, '0') + ' 00000 n \n';
+    put(enc.encode(x));
+    put(enc.encode(`trailer\n<< /Size ${bodies.length + 1} /Root ${catalogNo} 0 R >>\nstartxref\n${startxref}\n%%EOF\n`));
+
+    let total = 0;
+    for (const p of parts) total += p.length;
+    const out = new Uint8Array(total);
+    let at = 0;
+    for (const p of parts) { out.set(p, at); at += p.length; }
+    void latin;
+    return out;
+  }
+
+  async function exportPagesPdf(pgs, scale) {
+    const pdf = await buildPdf(pgs, scale);
+    await Backend.saveFile('notebook.pdf', [...pdf]);
+  }
+
+  async function importEjournalFile(text) {
+    const data = JSON.parse(text);
+    if (!Array.isArray(data.notebooks)) throw new Error('not an E-Journal file');
+    const fresh = data.notebooks.map((nb) => ({
+      ...nb, id: uid(),
+      pages: (nb.pages || []).map((pg) => ({ ...pg, id: uid() })),
+    }));
+    state.library.notebooks.push(...fresh);
+    await saveNow(true);
+    renderHome($('search').value);
+    return fresh.length;
+  }
+
+  /* One Import button for everything: .ejournal libraries and Microsoft
+     Journal .ink files are routed by file type, not by button. */
+  async function importAny() {
+    if (!Backend) { toast('No backend bridge'); return; }
+    // Prefer the native picker when available so we get real paths.
+    if (Backend.pickFiles) {
+      try {
+        const picked = await Backend.pickFiles();
+        if (!picked || !picked.length) return;
+        let books = 0, inked = 0;
+        for (const f of picked) {
+          if (/\.ink$/i.test(f.name)) { await importPickedInk(f.bytes, f.name); inked++; }
+          else {
+            const text = new TextDecoder().decode(f.bytes);
+            books += await importEjournalFile(text);
+          }
+        }
+        toast(`Imported ${books} notebook${books === 1 ? '' : 's'}${inked ? ` and ${inked} .ink file${inked === 1 ? '' : 's'}` : ''}`);
+        return;
+      } catch (err) { toast('Pick failed: ' + err.message); return; }
+    }
+    // Browser fallback: the input accepts both formats.
+    $('import-any-file').click();
+  }
+  $('import-btn').onclick = importAny;
+  $('import-any-file').onchange = async (e) => {
     const files = [...e.target.files];
     e.target.value = '';
+    let books = 0, inked = 0;
     for (const f of files) {
       try {
-        const buf = await f.arrayBuffer();
-        await importPickedInk(new Uint8Array(buf), f.name);
-      } catch (err) { toast(`Could not read ${f.name}: ${err.message}`); }
+        if (/\.ink$/i.test(f.name)) { await importPickedInk(new Uint8Array(await f.arrayBuffer()), f.name); inked++; }
+        else books += await importEjournalFile(await f.text());
+      } catch (err) { toast(`Could not import ${f.name}: ${err.message}`); }
     }
-  };
-  $('import-btn').onclick = async () => {
-    if (!Backend) { toast('No backend bridge'); return; }
-    try {
-      const text = await Backend.importLibrary();
-      if (!text) return;
-      const data = JSON.parse(text);
-      if (!Array.isArray(data.notebooks)) throw new Error('bad file');
-      for (const nb of data.notebooks) { nb.id = uid(); for (const pg of nb.pages || []) pg.id = uid(); state.library.notebooks.push(nb); }
-      scheduleSave(); renderHome($('search').value); toast('Imported');
-    } catch (err) { toast('Import failed: ' + err.message); }
+    if (books || inked) toast(`Imported ${books} notebook${books === 1 ? '' : 's'}${inked ? ` and ${inked} .ink file${inked === 1 ? '' : 's'}` : ''}`);
   };
   window.addEventListener('resize', () => { if (!$('editor-view').hidden) layoutPages(); });
 
