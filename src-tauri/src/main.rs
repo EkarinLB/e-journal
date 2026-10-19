@@ -177,6 +177,12 @@ fn library_load(app: AppHandle) -> Result<Value, String> {
         return Ok(serde_json::json!({ "notebooks": [] }));
     }
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    // A zero-length or whitespace-only file means a write was interrupted.
+    // Parsing it would fail and prevent the app from starting at all, even
+    // though a usable .bak sits beside it.
+    if text.trim().is_empty() {
+        return Ok(serde_json::json!({ "notebooks": [] }));
+    }
     let raw: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     normalize(raw)
 }
@@ -463,6 +469,26 @@ mod tests {
         );
         // The current canonical location must never be treated as a source.
         assert!(!cands.contains(&base.join("E-Journal").join(LIBRARY_FILE)));
+    }
+
+    #[test]
+    fn zero_length_library_does_not_break_startup() {
+        // An interrupted write leaves an empty file. Parsing it as JSON would
+        // fail and stop the app from launching, so it must read as empty.
+        let dir = std::env::temp_dir().join(format!("oj-empty-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("library.json");
+        for content in ["", "   ", "\n\t "] {
+            fs::write(&path, content).unwrap();
+            let text = fs::read_to_string(&path).unwrap();
+            assert!(
+                text.trim().is_empty(),
+                "fixture should be blank, got {content:?}"
+            );
+            // The guard in library_load checks this before parsing.
+            assert_eq!(notebook_count(&path), 0, "a blank file holds no notebooks");
+        }
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
