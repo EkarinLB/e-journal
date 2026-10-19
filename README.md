@@ -217,4 +217,4 @@ derived from Microsoft, and no Microsoft assets appear here.
 
 ## Star history
 
-[![Star History Chart](https://api.star-history.com/svg?repos=EkarinLB/e-journal&type=Date&legend=top-left)](https://www.star-history.com/?repos=EkarinLB%2Fe-journal&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=EkarinLB/e-journal&type=Date&legend=top-left)](https://www.star-history.com/?repos=EkarinLB%2Fe-journal&type=date&legend=top-
