@@ -10,4 +10,8 @@ contextBridge.exposeInMainWorld('oj', {
   pickInk: () => ipcRenderer.invoke('ink:pick'),
   parseInk: (bytes, fileName) => ipcRenderer.invoke('ink:parse', bytes, fileName),
   sqlWasmBinary: () => ipcRenderer.invoke('util:sqlwasm'),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: (url) => ipcRenderer.invoke('update:download', url),
+  openLibraryFolder: () => ipcRenderer.invoke('library:openFolder'),
+  libraryPathGet: () => ipcRenderer.invoke('library:path'),
 });
