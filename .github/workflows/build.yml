@@ -54,6 +54,8 @@ jobs:
 
   flatpak:
     name: Flatpak bundle
+    # Deliberately does NOT `needs: build`. This job is slow and best-effort;
+    # it must never block or delay the Windows/Linux package builds.
     needs: test
     runs-on: ubuntu-22.04
     steps:
@@ -88,12 +90,21 @@ jobs:
           # "not installed", this shows whether it really is missing.
           flatpak --system list --runtime
 
+      - name: Cache flatpak-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            .flatpak-builder
+            flatpak-build
+          key: flatpak-${{ runner.os }}-${{ hashFiles('flatpak/com.ejournal.app.yml') }}
+          restore-keys: flatpak-${{ runner.os }}-
+
       - name: Build flatpak
         run: |
           # flatpak-builder takes a build DIRECTORY *and* the manifest:
           #   flatpak-builder [options] DIRECTORY MANIFEST
           # No --disable-download: the manifest pulls sources from git.
-          flatpak-builder --force-clean -y --repo=repo \
+          flatpak-builder -y --repo=repo \
             flatpak-build flatpak/com.ejournal.app.yml \
             2>&1 | tee build.log
           # flatpak-builder's exit status is masked by the pipe above.

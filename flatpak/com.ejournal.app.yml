@@ -36,29 +36,25 @@ build-options:
     LIBSQLITE3_FLAGS: -DSQLITE_ENABLE_FTS5
 
 modules:
-  # The Freedesktop SDK ships no Node.js, and never will — a Tauri app with a
-  # web frontend needs one at build time. Node is built here as its own module
-  # against the SDK (the standard Flatpak pattern) so the app module can use it.
+  # The Freedesktop SDK ships no Node.js and never will, so one is needed to
+  # build the web frontend. Official PREBUILT binaries are used rather than
+  # compiling from source: compiling OpenSSL + V8 inside the sandbox took
+  # 25-40 minutes per CI run and produced ~3000 lines of compiler output.
+  # Only node/npm are kept; the sources and docs are discarded.
   - name: node
     buildsystem: simple
     build-commands:
-      - ./configure --prefix=/app --libdir=/app/lib
-      - make -j$(( $(nproc) > 4 ? 4 : $(nproc) ))
-      - make install
+      - install -Dm755 bin/node /app/bin/node
+      - install -Dm755 bin/npm /app/bin/npm
+      - install -Dm755 bin/npx /app/bin/npx
+      - install -Dm644 lib/node_modules/npm/package.json /app/lib/node_modules/npm/package.json
+      - cp -r lib/node_modules/npm/bin /app/lib/node_modules/npm/bin
+      - rm -rf /app/include /app/share
     sources:
       - type: archive
-        url: https://nodejs.org/dist/v22.11.0/node-v22.11.0.tar.xz
-        sha256: bbf0297761d53aefda9d7855c57c7d2c272b83a7b5bad4fea9cb29006d8e1d35
+        url: https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz
+        sha256: 83bf07dd343002a26211cf1fcd46a9d9534219aad42ee02847816940bf610a72
         strip-components: 1
-    cleanup:
-      - /app/include
-      - /app/share/doc
-      - /app/share/man
-      - /app/share/man/man1
-      - /app/lib/node_modules/npm/docs
-      - /app/lib/node_modules/npm/test
-      - /app/lib/node_modules/corepack/dist/lib
-      - /app/bin/corepack
 
   - name: e-journal
     buildsystem: simple
