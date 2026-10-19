@@ -11,8 +11,10 @@
 #   flatpak-builder --user --install --force-clean build flatpak/com.ejournal.app.yml
 
 app-id: com.ejournal.app
+# 25.08 rather than 24.08: the 24.08 SDK ships rustc 1.89, but current Tauri
+# 2.12 crates require rustc >= 1.90, so the app would not compile.
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 # No `base:`/`base-version:` here. Declaring a base named after the runtime
 # makes flatpak-builder search for an *app* ref (app/org.freedesktop.Platform),
@@ -45,11 +47,17 @@ modules:
     buildsystem: simple
     build-commands:
       - install -Dm755 bin/node /app/bin/node
-      - install -Dm755 bin/npm /app/bin/npm
-      - install -Dm755 bin/npx /app/bin/npx
-      - install -Dm644 lib/node_modules/npm/package.json /app/lib/node_modules/npm/package.json
-      - cp -r lib/node_modules/npm/bin /app/lib/node_modules/npm/bin
-      - rm -rf /app/include /app/share
+      - install -d /app/lib/node_modules
+      - cp -r lib/node_modules/npm /app/lib/node_modules/npm
+      # npm-cli.js requires '../lib/cli.js' relative to itself, so it must
+      # stay inside npm's own tree. Copying it to /app/bin fails with
+      # MODULE_NOT_FOUND; a shell wrapper loses its arguments because the
+      # builder runs commands through a shell that expands "$@" to nothing.
+      - chmod +x /app/lib/node_modules/npm/bin/npm-cli.js
+      - chmod +x /app/lib/node_modules/npm/bin/npx-cli.js
+      - ln -s ../lib/node_modules/npm/bin/npm-cli.js /app/bin/npm
+      - ln -s ../lib/node_modules/npm/bin/npx-cli.js /app/bin/npx
+      - rm -rf /app/include /app/share /app/lib/node_modules/npm/docs /app/lib/node_modules/npm/test
     sources:
       - type: archive
         url: https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz
@@ -58,6 +66,12 @@ modules:
 
   - name: e-journal
     buildsystem: simple
+    # npm must reach the registry at BUILD time. Without network in the
+    # sandbox it fails with EAI_AGAIN, which npm reports as the very
+    # misleading "Exit handler never called!".
+    build-options:
+      build-args:
+        - --share=network
     build-commands:
       # Keep npm's cache and config inside /app. Outside it they live under
       # $HOME, which does not exist in the build sandbox, and npm aborts with

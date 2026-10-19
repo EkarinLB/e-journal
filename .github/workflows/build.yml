@@ -83,9 +83,9 @@ jobs:
           # with --user) leaves the builder unable to find them, so use sudo.
           sudo flatpak --system remote-add --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak --system install -y org.freedesktop.Platform//24.08 \
-            org.freedesktop.Sdk//24.08 \
-            org.freedesktop.Sdk.Extension.rust-stable//24.08
+          sudo flatpak --system install -y org.freedesktop.Platform//25.08 \
+            org.freedesktop.Sdk//25.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//25.08
           # Print what is actually installed: if the build reports a runtime
           # "not installed", this shows whether it really is missing.
           flatpak --system list --runtime
