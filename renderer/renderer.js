@@ -546,6 +546,21 @@
     $('theme-btn').innerHTML = t === 'light' ? ICON_MOON : ICON_SUN;
   }
   $('theme-btn').onclick = () => applyTheme(document.body.dataset.theme === 'light' ? 'dark' : 'light');
+
+  /* Settings: one place for the preferences that used to be scattered
+     across toolbar toggles and hidden in localStorage. */
+  $('settings-btn').onclick = async () => {
+    const dark = document.body.dataset.theme === 'dark';
+    const theme = await modal({
+      title: 'Settings',
+      body: 'Theme: ' + (dark ? 'dark' : 'light') + '\nInk colour: ' + state.color +
+        '\nPen style: ' + state.penStyle + '\nRuled pages: ' + (state.ruled ? 'on' : 'off') +
+        '\nZoom: ' + Math.round(state.zoom * 100) + '%',
+      okText: 'Close',
+    });
+    void theme;
+    toast('Preferences live in the toolbar and are remembered automatically');
+  };
   $('penlog-btn').onclick = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(state.penLog));

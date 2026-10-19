@@ -1,6 +1,6 @@
 {
   "name": "E-Journal",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Local-first ink notebook for Windows and Linux. Original clean-room code, no cloud.",
   "main": "main.js",
   "scripts": {
