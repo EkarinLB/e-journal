@@ -134,6 +134,10 @@ jobs:
       contents: write
     strategy:
       fail-fast: false
+      # fedora-latest is a scarce runner label; without this the Fedora job
+      # sits queued indefinitely while other jobs hold the account's runner
+      # slots. One at a time ensures every job can actually start.
+      max-parallel: 1
       matrix:
         include:
           - os: ubuntu-22.04

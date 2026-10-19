@@ -11,11 +11,17 @@
 #   flatpak-builder --user --install --force-clean build flatpak/com.ejournal.app.yml
 
 app-id: com.ejournal.app
-# 25.08 rather than 24.08: the 24.08 SDK ships rustc 1.89, but current Tauri
-# 2.12 crates require rustc >= 1.90, so the app would not compile.
-runtime: org.freedesktop.Platform
-runtime-version: '25.08'
-sdk: org.freedesktop.Sdk
+# The GNOME runtime is required, not freedesktop: a Tauri Linux app links
+# against WebKitGTK, and the freedesktop SDK ships no WebKit at all (no
+# webkit2gtk-4.1.pc anywhere), so the build fails with
+# "javascriptcoregtk-4.1 was not found". org.gnome.Sdk bundles WebKitGTK.
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+# The rustc toolchain comes from the freedesktop extension, which the GNOME
+# SDK does not provide.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable//25.08
 # No `base:`/`base-version:` here. Declaring a base named after the runtime
 # makes flatpak-builder search for an *app* ref (app/org.freedesktop.Platform),
 # which does not exist, and the build fails with "not installed".
@@ -34,8 +40,6 @@ build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
   env:
     RUST_BACKTRACE: '1'
-    # Tauri's webview needs these at build time on Linux
-    LIBSQLITE3_FLAGS: -DSQLITE_ENABLE_FTS5
 
 modules:
   # The Freedesktop SDK ships no Node.js and never will, so one is needed to
