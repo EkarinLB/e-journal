@@ -4,21 +4,13 @@ version = "0.12.0"
 edition = "2021"
 description = "Local-first ink notebook — native, no webview"
 
-# Phase 1: pure-Rust core, zero dependencies beyond serde.
-# Geometry, model and storage are ported from renderer/ink.js, lib/model.js
-# and src-tauri/src/main.rs. Windowing and rasterisation land in phase 2.
+# The core is pure Rust: geometry, model and storage ported from
+# renderer/ink.js, lib/model.js and src-tauri/src/main.rs. It has no
+# dependencies beyond serde, so it builds and tests anywhere, on CI or
+# offline, with no system libraries to install.
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Phase 2: the native shell. winit gives us the window and raw pen input
-# (pressure, palm rejection) without a webview; tiny-skia rasterises to the
-# window. Together they remove the browser engine entirely.
-winit = "0.30"
-tiny-skia = "0.11"
-# CPU blit into the window. winit has no software present path of its own,
-# so this is what puts rasterised pixels on screen without a GPU driver.
-softbuffer = "0.4"
 
 # Windows pen input. WM_POINTER_* carries true stylus pressure and identifies
 # pen vs touch, which winit 0.30 no longer exposes. Linux uses libinput
@@ -33,12 +25,40 @@ windows = { version = "0.58", features = [
     "Win32_System_LibraryLoader",
 ] }
 
+# The windowing stack is optional. It pulls in platform libraries (X11 /
+# Wayland / GTK headers on Linux), which would otherwise be required just to
+# compile the core — and made the Linux CI job fail for want of them.
+[dependencies.winit]
+version = "0.30"
+optional = true
+
+[dependencies.tiny-skia]
+version = "0.11"
+
+# CPU blit into the window. winit has no software present path of its own,
+# so this is what puts rasterised pixels on screen without a GPU driver.
+[dependencies.softbuffer]
+version = "0.4"
+optional = true
+
 [features]
 default = []
 # Tests skip the windowing module; the logic under test is all pure Rust.
 headless = []
 # The window, input loop and presentation layer. Off by default so the core
-# can be tested and cross-checked on CI without a display.
-window = []
+# can be tested and cross-checked on CI without a display or system libraries.
+# tiny-skia stays unconditional: the page renderer is core logic, and it is
+# pure Rust with no system dependencies.
+window = ["dep:winit", "dep:softbuffer"]
 
-[target.x86_64-pc-windows-msvc.dependencies]
+[[bin]]
+name = "ejournal"
+path = "src/main.rs"
+
+[profile.release]
+# Ink rendering is fill-rate bound; these cut both build time and binary size
+# without measurable frame-time cost.
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
