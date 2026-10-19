@@ -732,19 +732,36 @@
     const nb = notebook(); const u = state.undoStack.pop();
     if (!nb || !u) return;
     const pg = nb.pages.find((p) => p.id === u.pageId);
-    if (pg) {
-      const gone = pg.strokes.find((s) => s.id === u.strokeId);
-      pg.strokes = pg.strokes.filter((s) => s.id !== u.strokeId);
+    if (!pg) return;
+    // An erase entry restores the whole page snapshot it captured. Without
+    // this, Undo after erasing silently did nothing.
+    if (u.kind === 'erase') {
+      pg.strokes = u.before;
       invalidateInk(pg.id);
-      if (gone) state.redoStack.push({ pageId: pg.id, stroke: gone });
+      state.redoStack.push({ pageId: pg.id, kind: 'erase', after: pg.strokes.slice() });
       scheduleSave(); redrawPage(pg.id);
+      return;
     }
+    const gone = pg.strokes.find((s) => s.id === u.strokeId);
+    pg.strokes = pg.strokes.filter((s) => s.id !== u.strokeId);
+    invalidateInk(pg.id);
+    if (gone) state.redoStack.push({ pageId: pg.id, stroke: gone });
+    scheduleSave(); redrawPage(pg.id);
   };
   $('redo-btn').onclick = () => {
     const nb = notebook(); const r = state.redoStack.pop();
     if (!nb || !r) return;
     const pg = nb.pages.find((p) => p.id === r.pageId);
-    if (pg && !pg.strokes.some((s) => s.id === r.stroke.id)) {
+    if (!pg) return;
+    if (r.kind === 'erase') {
+      // Re-apply the erase: keep what is left now, and restore on undo.
+      pg.strokes = r.after.filter((s) => !pg.strokes.some((k) => k.id === s.id));
+      invalidateInk(pg.id);
+      state.undoStack.push({ pageId: pg.id, kind: 'erase', before: r.after.slice() });
+      scheduleSave(); redrawPage(pg.id);
+      return;
+    }
+    if (r.stroke && !pg.strokes.some((s) => s.id === r.stroke.id)) {
       pg.strokes.push(r.stroke);
       invalidateInk(pg.id);
       state.undoStack.push({ pageId: pg.id, strokeId: r.stroke.id, stroke: r.stroke });

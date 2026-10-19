@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "tauri": "tauri",
-    "test": "node test/store.test.js && node test/ink.test.js"
+    "test": "node test/store.test.js && node test/ink.test.js && node test/undo.test.js"
   },
   "license": "MIT",
   "devDependencies": {
