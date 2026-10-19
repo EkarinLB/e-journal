@@ -215,8 +215,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: build-${{ matrix.os }}-${{ github.run_number }}
-          releaseName: "E-Journal 0.11.0 beta (build ${{ github.run_number }})"
-          releaseDraft: true
+          # Tag builds attach to the real version tag so the published release
+          # carries every artifact. Branch builds upload a workflow artifact
+          # instead: creating a draft release per run produced 44 orphaned
+          # "build-*" releases that nothing ever attached to.
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && format('E-Journal {0}', github.ref_name) || '' }}
+          releaseDraft: false
           prerelease: true
           args: --bundles ${{ matrix.bundles }}
+
+      - name: Upload bundles as a workflow artifact (branch builds only)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/**/*.{exe,msi,deb,AppImage,rpm}
