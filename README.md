@@ -99,17 +99,16 @@
 
 ## Downloads
 
-Latest: **[v0.11.0 — beta](https://github.com/EkarinLB/e-journal/releases/tag/v0.11.0)**
+Latest: **[v0.12.0 — beta](https://github.com/EkarinLB/e-journal/releases/tag/v0.12.0)**
 
 | Platform | File | Size |
 |:-:|---|---|
-| Windows 64-bit | [`E-Journal_0.11.0_x64-setup.exe`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/E-Journal_0.11.0_x64-setup.exe) | 2.5 MB |
-| Windows (MSI / managed) | [`E-Journal_0.11.0_x64_en-US.msi`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/E-Journal_0.11.0_x64_en-US.msi) | 3.5 MB |
-| Debian / Ubuntu | [`E-Journal_0.11.0_amd64.deb`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/E-Journal_0.11.0_amd64.deb) | 3.6 MB |
-| Linux portable | [`E-Journal_0.11.0_amd64.AppImage`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/E-Journal_0.11.0_amd64.AppImage) | 78 MB |
+| Windows 64-bit | [`E-Journal_0.12.0_x64-setup.exe`](https://github.com/EkarinLB/e-journal/releases/download/v0.12.0/E-Journal_0.12.0_x64-setup.exe) | 2.5 MB |
+| Windows (MSI / managed) | [`E-Journal_0.12.0_x64_en-US.msi`](https://github.com/EkarinLB/e-journal/releases/download/v0.12.0/E-Journal_0.12.0_x64_en-US.msi) | 3.5 MB |
+| Debian / Ubuntu | [`E-Journal_0.12.0_amd64.deb`](https://github.com/EkarinLB/e-journal/releases/download/v0.12.0/E-Journal_0.12.0_amd64.deb) | 4.6 MB |
+| Linux portable | [`E-Journal_0.12.0_amd64.AppImage`](https://github.com/EkarinLB/e-journal/releases/download/v0.12.0/E-Journal_0.12.0_amd64.AppImage) | 84 MB |
 
-SHA-256 sums for every artifact are in
-[`checksums.txt`](https://github.com/EkarinLB/e-journal/releases/download/v0.11.0/checksums.txt).
+SHA-256 sums for every artifact are in [`checksums.txt`](https://github.com/EkarinLB/e-journal/releases/download/v0.12.0/checksums.txt).
 
 The `.exe` installs for the current user without administrator rights and adds an entry to
 Settings → Apps, so it uninstalls normally. The `.deb` installs like any other Debian package;
@@ -158,7 +157,7 @@ E-Journal works offline: it has no account, no telemetry, and contacts no server
 git clone https://github.com/EkarinLB/e-journal
 cd e-journal
 npm install
-npm test            # 10 checks: model, storage and ink gestures, no GUI needed
+npm test            # version guard, storage, ink gestures and undo/redo — no GUI needed
 npm run tauri dev   # the native app with hot reload
 ```
 
@@ -183,7 +182,6 @@ runnable without a GUI, so a change can be verified without launching the app.
 > editor is solid, but E-Journal is young. The gaps we know about, tracked rather than hidden:
 >
 > - **No version history.** One library file plus a single `.bak`. No timeline, no named snapshots, no undo across sessions.
-> - **No export of ink.** Pages are not yet exportable as PDF or PNG — ink is not portable out of the app.
 > - **No typed text**, sticky notes, shapes or lasso selection.
 > - **Search covers notebook titles only.** There is no handwriting recognition, so you cannot search what you have written.
 > - **`.ink` import is partial.** It reads the page snapshots and works on most files; three of the 25 sample files carry no snapshot and import blank because stroke-blob decoding is unfinished.
@@ -195,12 +193,11 @@ runnable without a GUI, so a change can be verified without launching the app.
 
 ## Roadmap
 
-1. Ink export to PDF and PNG, so a page can leave the app
-2. Version history with named snapshots
-3. Finish stroke-blob decoding so every `.ink` file imports with real ink
-4. Handwriting search index, built locally
-5. Typed text and shapes
-6. Flathub submission and a signed Windows build
+1. Version history with named snapshots
+2. Finish stroke-blob decoding so every `.ink` file imports with real ink
+3. Handwriting search index, built locally
+4. Typed text and shapes
+5. Flathub submission and a signed Windows build
 
 ## A note on what this is
 
