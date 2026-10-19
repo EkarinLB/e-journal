@@ -43,8 +43,12 @@ pub struct TabletState {
     slots: Vec<Slot>,
 }
 
+/// Which end of the stylus is in contact.
+///
+/// Public because `mod.rs` re-exports it as the platform-neutral handle an
+/// event loop feeds; callers match on it to decide pen vs eraser behaviour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum Tool {
+pub enum Tool {
     #[default]
     None,
     Pen,
