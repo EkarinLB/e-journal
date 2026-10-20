@@ -11,6 +11,10 @@ description = "Local-first ink notebook — native, no webview"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+
+# Text rendering for the native UI (buttons, labels, settings). Pure Rust.
+ab_glyph = "0.2"
 
 # Windows pen input. WM_POINTER_* carries true stylus pressure and identifies
 # pen vs touch, which winit 0.30 no longer exposes. Linux uses libinput
