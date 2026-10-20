@@ -92,10 +92,10 @@ enum View {
 
 /// One entry in the undo stack.
 struct UndoEntry {
-    notebook_id: String,
-    page_id: String,
-    before: Vec<ModelStroke>,
-    after: Vec<ModelStroke>,
+    _notebook_id: String,
+    _page_id: String,
+    _before: Vec<ModelStroke>,
+    _after: Vec<ModelStroke>,
 }
 
 /// A stroke being drawn right now.
@@ -132,18 +132,14 @@ struct App {
     color: Color,
     width: f32,
     pen_style: PenStyle,
-    zoom: f32,
     ruled: bool,
     pressure_enabled: bool,
     pressure_sensitivity: f32,
 
     // --- Input ---
-    pen_state: PenState,
-    drawing: Option<Drawing>,
+    pen_state: PenState,    drawing: Option<Drawing>,
     /// Last known pointer position.
     cursor: (f32, f32),
-
-    // --- Undo / redo ---
     undo_stack: Vec<UndoEntry>,
     redo_stack: Vec<UndoEntry>,
 }
@@ -184,7 +180,10 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(size) => {
                 let surface = self.surface.as_mut().unwrap();
-                let _ = surface.resize(NonZeroU32::new(size.width).unwrap(), NonZeroU32::new(size.height).unwrap());
+                let _ = surface.resize(
+                    NonZeroU32::new(size.width).unwrap(),
+                    NonZeroU32::new(size.height).unwrap(),
+                );
                 self.frame = Some(Pixmap::new(size.width, size.height).unwrap());
                 self.frame.as_mut().unwrap().fill(self.theme.bg());
                 self.page_cache.clear();
@@ -247,12 +246,10 @@ impl App {
             color: Color::from_rgba8(16, 20, 24, 255),
             width: 3.0,
             pen_style: PenStyle::Fountain,
-            zoom: 1.0,
             ruled: true,
             pressure_enabled: true,
             pressure_sensitivity: 1.0,
-            pen_state: PenState::new(),
-            drawing: None,
+            pen_state: PenState::new(),            drawing: None,
             cursor: (0.0, 0.0),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -372,10 +369,10 @@ impl App {
                 }
                 // Notebook rows.
                 let mut yy = 80.0;
-                for (i, nb) in self.library.notebooks.iter().enumerate() {
+                for (_i, _nb) in self.library.notebooks.iter().enumerate() {
                     let row_h = 72.0;
                     if x >= 20.0 && x <= fw - 20.0 && y >= yy && y <= yy + row_h {
-                        self.notebook = Some(i);
+                        self.notebook = Some(_i);
                         self.page = Some(0);
                         self.view = View::Editor;
                         self.page_cache.clear();
@@ -493,7 +490,12 @@ impl App {
             pg.strokes.clone()
         };
 
-        self.undo_stack.push(UndoEntry { notebook_id: nb_id, page_id: pg_id, before, after });
+        self.undo_stack.push(UndoEntry {
+        _notebook_id: nb_id,
+        _page_id: pg_id,
+        _before: before,
+        _after: after,
+    });
         self.redo_stack.clear();
 
         // Invalidate page cache so it re-renders.
@@ -567,8 +569,11 @@ fn load_font() -> Option<FontRef<'static>> {
 }
 
 /// Draw a line of text at (x, y) with the given size and color.
-/// Uses ab_glyph's outline_glyph + draw callback to render each glyph as
-/// alpha coverage into the target pixmap.
+///
+/// tiny-skia stores pixels in premultiplied RGBA. We alpha-blend each glyph
+/// coverage pixel onto the existing buffer using the standard over operator:
+///   out_alpha = src_alpha + dst_alpha * (1 - src_alpha)
+///   out_rgb   = src_premul_rgb + dst_premul_rgb * (1 - src_alpha)
 fn draw_text(
     pm: &mut Pixmap,
     font: &FontRef,
@@ -580,9 +585,9 @@ fn draw_text(
 ) {
     let scale = PxScale::from(size);
     let mut cursor_x = 0.0f32;
-    let r = color.red() as u8;
-    let g = color.green() as u8;
-    let b = color.blue() as u8;
+    let r = color.red() as u32;
+    let g = color.green() as u32;
+    let b = color.blue() as u32;
 
     for ch in text.chars() {
         let gid = font.glyph_id(ch);
@@ -590,24 +595,44 @@ fn draw_text(
             cursor_x += font.h_advance_unscaled(gid) * scale.x / 1000.0;
             continue;
         }
-        if let Some(outlined) = font.outline_glyph(Glyph { id: gid, scale, position: point(cursor_x, 0.0) }) {
+        let glyph = Glyph { id: gid, scale, position: point(cursor_x, 0.0) };
+        if let Some(outlined) = font.outline_glyph(glyph) {
             let bounds = outlined.px_bounds();
             let offset_x = x + cursor_x + bounds.min.x;
             let offset_y = y + bounds.min.y;
 
             let frame_w = pm.width() as u32;
+            let frame_h = pm.height() as u32;
             let frame_data = pm.data_mut();
             outlined.draw(|px, py, coverage| {
                 if coverage > 0.0 {
-                    let alpha = (coverage * 255.0) as u8;
                     let dx = (offset_x + px as f32) as u32;
                     let dy = (offset_y + py as f32) as u32;
-                    if dx < frame_w {
+                    if dx < frame_w && dy < frame_h {
                         let idx = ((dy * frame_w + dx) * 4) as usize;
-                        frame_data[idx] = r;
-                        frame_data[idx + 1] = g;
-                        frame_data[idx + 2] = b;
-                        frame_data[idx + 3] = alpha;
+                        // Source alpha in 0..255.
+                        let sa = (coverage * 255.0) as u32;
+                        if sa == 0 {
+                            return;
+                        }
+                        // Destination (already premultiplied).
+                        let da = frame_data[idx + 3] as u32;
+                        // Source premultiplied RGB.
+                        let sr = (r * sa) / 255;
+                        let sg = (g * sa) / 255;
+                        let sb = (b * sa) / 255;
+                        // Alpha blend in premultiplied space:
+                        //   out_a   = sa + da * (255 - sa) / 255
+                        //   out_rgb = sr  + dr * (255 - sa) / 255
+                        let inv_sa = 255 - sa;
+                        let out_a = sa + (da * inv_sa) / 255;
+                        let out_r = sr + (frame_data[idx] as u32 * inv_sa) / 255;
+                        let out_g = sg + (frame_data[idx + 1] as u32 * inv_sa) / 255;
+                        let out_b = sb + (frame_data[idx + 2] as u32 * inv_sa) / 255;
+                        frame_data[idx] = out_r as u8;
+                        frame_data[idx + 1] = out_g as u8;
+                        frame_data[idx + 2] = out_b as u8;
+                        frame_data[idx + 3] = out_a as u8;
                     }
                 }
             });
@@ -666,13 +691,14 @@ fn draw_button(
     label: &str,
     theme: Theme,
     active: bool,
-) {
+) -> (f32, f32) {
     let bg = if active { theme.accent() } else { theme.panel() };
     let fg = if active { Color::WHITE } else { theme.ink() };
     rect(pm, x, y, w, h, bg);
     stroke_rect(pm, x, y, w, h, theme.border(), 1.0);
     let tw = text_width(&Some(font.clone()), 14.0, label);
     draw_text(pm, font, x + (w - tw) / 2.0, y + h / 2.0 + 4.0, 14.0, label, fg);
+    (x + w, y + h)
 }
 
 // --- View renderers ---
@@ -696,8 +722,6 @@ fn render_home(app: &mut App, frame: &mut Pixmap) {
     let bx = fw - btn_w - 20.0;
     let by = 12.0;
     draw_button(frame, font, bx, by, btn_w, btn_h, "+ New notebook", theme, false);
-
-    // Notebook list.
     let mut yy = 80.0;
     for nb in app.library.notebooks.iter() {
         let row_h = 72.0;
@@ -766,7 +790,7 @@ fn render_editor(app: &mut App, frame: &mut Pixmap) {
     let vis = visible_pages(&page_rects, view_top, view_bottom, 1);
 
     for pid in &vis {
-        let pg = &nb_pages[pid.0];
+        let _pg = &nb_pages[pid.0];
         let py = pid.0 as f32 * (PAGE_H + PAGE_SPACING);
         // Page background.
         rect(frame, 40.0, canvas_y + py, PAGE_W, PAGE_H, Color::from_rgba8(247, 243, 234, 255));
@@ -824,11 +848,9 @@ fn render_editor(app: &mut App, frame: &mut Pixmap) {
     // Color chip.
     rect(frame, tx, tb_y + 14.0, 24.0, 24.0, app.color);
     stroke_rect(frame, tx, tb_y + 14.0, 24.0, 24.0, theme.border(), 1.0);
-    tx += 40.0;
 
     // Width.
     draw_text(frame, font, tx, tb_y + 12.0 + 8.0, 12.0, "Width", theme.ink_soft());
-    tx += 30.0;
 
     // Settings button (far right).
     draw_button(frame, font, fw - 80.0, tb_y + 8.0, 64.0, 32.0, "Settings", theme, false);
@@ -853,6 +875,11 @@ fn render_settings(app: &mut App, frame: &mut Pixmap) {
     let checked = if dark { "[■]" } else { "[ ]" };
     draw_text(frame, font, 20.0, yy + 8.0, 14.0, checked, theme.ink());
     draw_text(frame, font, 44.0, yy + 8.0, 14.0, "Dark theme", theme.ink());
+    // Handle theme toggle click
+    if app.cursor.0 >= 20.0 && app.cursor.0 <= 44.0 && app.cursor.1 >= yy && app.cursor.1 <= yy + 20.0 {
+        app.theme = if dark { Theme::Light } else { Theme::Dark };
+        app.needs_redraw = true;
+    }
     yy += 40.0;
 
     // Pressure.
