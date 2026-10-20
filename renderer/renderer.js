@@ -128,17 +128,18 @@
   }
   // Last line of defence for still-debounced edits (e.g. a drag or an eraser
   // sweep): flush when the page is hidden or the window goes away, so a
-  // pending save is not silently discarded.
+  // pending save is not silently discarded. The save is awaited so a refresh
+  // or close cannot unload the page before pending writes reach disk.
   function installSaveFlush() {
-    const flush = () => {
+    const flush = async () => {
       if (!saveTimer) return;
       clearTimeout(saveTimer);
       saveTimer = null;
-      writeLibrary(false);
+      try { await writeLibrary(false); } catch (_) {}
     };
-    window.addEventListener('pagehide', flush);
-    window.addEventListener('beforeunload', flush);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+    window.addEventListener('pagehide', () => { void flush(); });
+    window.addEventListener('beforeunload', () => { void flush(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { void flush(); } });
   }
 
   function toast(msg) {
@@ -683,6 +684,9 @@
   }
   function goHome() {
     state.nbId = null;
+    // Flush any pending edits before leaving the editor so a refresh or
+    // close cannot lose in-flight strokes.
+    void saveNow();
     $('editor-view').hidden = true; $('home-view').hidden = false;
     const hv = $('home-view');
     hv.classList.remove('view-enter'); void hv.offsetWidth; hv.classList.add('view-enter');
@@ -1114,7 +1118,6 @@
     }, 250);
   });
 
-  $('export-btn').onclick = () => { if (!Backend) { toast('No backend bridge'); return; } Backend.exportLibrary(state.library).catch((e) => toast(e.message)); };
   async function importPickedInk(data, name) {
     try {
       toast(`Reading ${name}…`);
