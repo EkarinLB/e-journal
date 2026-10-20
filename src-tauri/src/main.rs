@@ -418,14 +418,26 @@ fn update_check() -> Result<Value, String> {
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
-        .get("https://api.github.com/repos/EkarinLB/e-journal/releases/latest")
+        // List ALL releases (including prereleases) so a prerelease build can
+        // still detect newer releases. /releases/latest excludes prereleases,
+        // which would silently hide updates from beta users.
+        .get("https://api.github.com/repos/EkarinLB/e-journal/releases")
         .header("Accept", "application/vnd.github+json")
         .send()
         .map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         return Ok(serde_json::json!({ "update": false, "current": current }));
     }
-    let release: Value = resp.json().map_err(|e| e.to_string())?;
+    let releases: Vec<Value> = resp.json().map_err(|e| e.to_string())?;
+    let latest_release = releases.into_iter()
+        .max_by(|a, b| {
+            let a_date = a.get("published_at").and_then(|v| v.as_str()).unwrap_or("");
+            let b_date = b.get("published_at").and_then(|v| v.as_str()).unwrap_or("");
+            a_date.cmp(b_date)
+        });
+    let Some(release) = latest_release else {
+        return Ok(serde_json::json!({ "update": false, "current": current }));
+    };
     let latest = release.get("tag_name")
         .and_then(|v| v.as_str())
         .unwrap_or("")
